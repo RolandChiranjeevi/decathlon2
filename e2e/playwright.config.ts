@@ -10,5 +10,9 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure'
   },
-  reporter: [['list'], ['html', { open: 'never' }]]
+  reporter: [
+  ['list'],
+  ['html', { open: 'never' }],
+  ['json', { outputFile: 'results.json' }],
+],
 });

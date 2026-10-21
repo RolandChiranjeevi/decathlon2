@@ -70,6 +70,16 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 7
 
+      - name: Upload results for TestBench
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testbench-results
+          path: |
+            e2e/results.json
+            e2e/test-results/
+          retention-days: 7    
+
       - name: Upload application log
         if: always()
         uses: actions/upload-artifact@v4
