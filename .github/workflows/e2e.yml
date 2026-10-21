@@ -39,23 +39,10 @@ jobs:
 
       - name: Start Java application
         run: |
-          nohup java -jar target/*.jar \
-            --server.port=8080 \
-            > app.log 2>&1 &
-          echo $! > app.pid
-
-      - name: Wait for application
-        run: |
-          for i in {1..30}; do
-            if curl -sf http://localhost:8080/actuator/health; then
-              echo "Application is up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Application did not start"
-          cat app.log
-          exit 1    
+            nohup mvn spring-boot:run \
+              -Dspring-boot.run.arguments=--server.port=8080 \
+              > app.log 2>&1 &
+            echo $! > app.pid   
 
       - name: Run Playwright tests
         working-directory: e2e
