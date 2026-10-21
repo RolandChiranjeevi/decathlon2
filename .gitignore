@@ -1,0 +1,9 @@
+# Project exclude paths
+/target/notes.txt
+*.txt
+notes.txt
+node_modules/
+target/
+build/
+.env
+*.log
