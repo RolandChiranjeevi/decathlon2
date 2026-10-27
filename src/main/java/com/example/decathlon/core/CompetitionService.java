@@ -20,10 +20,37 @@ public class CompetitionService {
     private static final Pattern NAME = Pattern.compile("[\\p{L}\\p{N} '.-]+");
 
     private final ScoringService scoring;
+    private final String id;
+    private String name;
+    private final Competition type;
 
+    /** A mixed competition called "General", which can hold both decathlon and heptathlon competitors. */
     public CompetitionService(ScoringService scoring) {
-        this.scoring = scoring;
+        this(scoring, "default", "General", null);
     }
+
+    /**
+     * One competition. With a type it only takes that competition's events and competitors;
+     * with a null type (mixed) each competitor is fixed to one competition by their first result.
+     */
+    public CompetitionService(ScoringService scoring, String id, String name, Competition type) {
+        this.scoring = scoring;
+        this.id = id;
+        this.name = name;
+        this.type = type;
+    }
+
+    public String id() { return id; }
+
+    public synchronized String name() { return name; }
+
+    /** Package-private: the registry checks the name is valid and unique before calling this. */
+    synchronized void setName(String name) { this.name = name; }
+
+    /** The competition this holds, or null if it is mixed. */
+    public Competition type() { return type; }
+
+    public synchronized int competitorCount() { return competitors.size(); }
 
     /** One stored result: the raw result as entered and the points it scored. */
     public record Result(Double raw, int points) {}
@@ -65,15 +92,17 @@ public class CompetitionService {
 
     /** Adds a competitor for a given competition. Fails if an existing competitor already competes in the other one. */
     public synchronized void addCompetitor(String name, Competition competition) {
+        requireType(competition);
         assign(register(name), competition);
     }
 
     /**
      * Scores a result for an existing competitor. A second result for the same event replaces the first.
-     * A competitor cannot mix decathlon and heptathlon events.
+     * A competitor cannot mix decathlon and heptathlon events, and a typed competition only takes its own events.
      */
     public synchronized int score(String name, String eventId, Double raw) {
         EventDef event = scoring.validate(eventId, raw);
+        requireType(event.competition());
         int pts = scoring.score(eventId, raw);
         Competitor c = find(name);
         assign(c, event.competition());
@@ -126,25 +155,28 @@ public class CompetitionService {
      * Standings, highest total first, ties in the order the competitors were added.
      * Positions are counted within each competition, so decathletes and heptathletes are ranked apart.
      * Tied competitors share a position and the next one skips (1, 2, 2, 4).
-     * Competitors with no result yet have no competition and are ranked among themselves.
+     * Competitors with no result yet have no position (null) and are listed last.
      * Each row: name, competition, scores (event to points), raw (event to raw result), total, position.
      */
     public synchronized List<Map<String, Object>> standings() {
         List<Competitor> ranked = new ArrayList<>(competitors.values());
         ranked.sort(Comparator.comparingInt(Competitor::total).reversed());
 
-        // Per competition: {competitors seen so far, previous total, current position}.
+        // Per competition: {competitors ranked so far, previous total, current position}.
         Map<Competition, int[]> groups = new HashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
         for (Competitor c : ranked) {
             int total = c.total();
-            int[] g = groups.computeIfAbsent(c.competition, k -> new int[3]);
-            g[0]++;
-            if (g[0] == 1 || total != g[1]) {
-                g[2] = g[0];
+            Integer position = null;
+            if (!c.results.isEmpty()) {
+                int[] g = groups.computeIfAbsent(c.competition, k -> new int[3]);
+                g[0]++;
+                if (g[0] == 1 || total != g[1]) {
+                    g[2] = g[0];
+                }
+                g[1] = total;
+                position = g[2];
             }
-            g[1] = total;
-            int position = g[2];
 
             Map<String, Integer> points = new LinkedHashMap<>();
             Map<String, Double> raws = new LinkedHashMap<>();
@@ -189,7 +221,7 @@ public class CompetitionService {
             Map<String, Double> raws = (Map<String, Double>) row.get("raw");
             List<String> cells = new ArrayList<>();
             Object competition = row.get("competition");
-            cells.add(competition == null ? "" : String.valueOf(row.get("position")));
+            cells.add(row.get("position") == null ? "" : String.valueOf(row.get("position")));
             cells.add((String) row.get("name"));
             cells.add(competition == null ? "" : label(Competition.valueOf((String) competition)));
             for (EventDef e : used) {
@@ -209,6 +241,16 @@ public class CompetitionService {
         return prefix + "-" + LocalDateTime.now().format(STAMP) + "." + extension;
     }
 
+    /** A competition name made safe for a file name: "Göteborg Open 2026" becomes "goteborg-open-2026". */
+    public static String slug(String text) {
+        String plain = java.text.Normalizer.normalize(text == null ? "" : text, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return plain.isEmpty() ? "competition" : plain;
+    }
+
     /**
      * The whole competition as JSON: competitors, their competition and raw results.
      * Points and positions are not stored; they are worked out again on load.
@@ -226,6 +268,8 @@ public class CompetitionService {
         }
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("version", STATE_VERSION);
+        root.put("name", name);
+        root.put("type", type == null ? null : type.name());
         root.put("competitors", list);
         try {
             return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(root);
@@ -258,6 +302,10 @@ public class CompetitionService {
         if (!root.path("version").isInt() || root.get("version").asInt() != STATE_VERSION) {
             throw bad("unsupported or missing version");
         }
+        JsonNode savedType = root.get("type");
+        if (type != null && savedType != null && !savedType.isNull() && !type.name().equals(savedType.asText())) {
+            throw bad("this is not a " + label(type) + " save");
+        }
         JsonNode list = root.get("competitors");
         if (list == null || !list.isArray()) throw bad("competitors are missing");
         if (list.size() > MAX_COMPETITORS) throw bad("more than " + MAX_COMPETITORS + " competitors");
@@ -277,6 +325,10 @@ public class CompetitionService {
                 } catch (IllegalArgumentException e) {
                     throw bad("unknown competition for " + name);
                 }
+            }
+            if (type != null) {
+                if (c.competition != null && c.competition != type) throw bad(name + " is not a " + label(type) + " competitor");
+                c.competition = type;
             }
             JsonNode results = node.get("results");
             if (results == null || !results.isObject()) throw bad("results are missing for " + name);
@@ -337,6 +389,14 @@ public class CompetitionService {
         return competition == Competition.DECATHLON ? "Decathlon" : "Heptathlon";
     }
 
+    /** A typed competition only takes its own competition's events and competitors. */
+    private void requireType(Competition competition) {
+        if (type != null && competition != type) {
+            throw new CoreException(CoreException.Kind.INVALID,
+                    "This is a " + label(type) + " competition and cannot take " + label(competition) + " results");
+        }
+    }
+
     private Competitor register(String name) {
         String n = validateName(name);
         Competitor existing = competitors.get(n);
@@ -345,6 +405,7 @@ public class CompetitionService {
             throw new CoreException(CoreException.Kind.LIMIT, "Too many competitors");
         }
         Competitor c = new Competitor(n);
+        c.competition = type;
         competitors.put(n, c);
         return c;
     }

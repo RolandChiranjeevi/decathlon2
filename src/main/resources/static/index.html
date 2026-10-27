@@ -13,6 +13,7 @@
             --danger: #b91c1c; --danger-soft: #fef2f2;
             --ok: #15803d; --ok-soft: #f0fdf4;
             --gold: #f5c542; --silver: #cbd5e1; --bronze: #e0a26b; --on-medal: #1f2937;
+            --hep-soft: #fce7f3; --hep-fg: #9d174d;
             --radius: 10px;
             --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -24,10 +25,12 @@
                 --primary: #7aa2ff; --on-primary: #0b1220; --primary-soft: #1a2a52;
                 --danger: #ff9a9a; --danger-soft: #3a1519;
                 --ok: #6ee7a0; --ok-soft: #10301f;
+                --hep-soft: #3b1530; --hep-fg: #f9a8d4;
             }
         }
 
         * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
         body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5; }
         main { max-width: 1440px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
         h1 { font-size: 1.6rem; margin: 0 0 .15rem; }
@@ -36,6 +39,22 @@
         .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
         .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+
+        /* Competition switcher */
+        .competition-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; }
+        .competition-bar .field { flex: 1 1 18rem; max-width: 30rem; }
+        .competition-bar select { font-weight: 600; }
+        .competition-bar .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+        .competition-bar .hint { flex-basis: 100%; margin: 0; }
+        .badge { display: inline-flex; align-items: center; height: 28px; padding: 0 .75rem; border-radius: 999px; font-size: .8rem; font-weight: 700; background: var(--soft); color: var(--muted); }
+        .badge[data-type="DECATHLON"] { background: var(--primary-soft); color: var(--primary); }
+        .badge[data-type="HEPTATHLON"] { background: var(--hep-soft); color: var(--hep-fg); }
+        .type-fields { margin: .9rem 0 0; padding: 0; border: 0; display: flex; gap: 1.25rem; flex-wrap: wrap; }
+        .type-fields legend { padding: 0; margin-bottom: .35rem; font-size: .8rem; font-weight: 600; color: var(--muted); }
+        label.radio { display: inline-flex; align-items: center; gap: .5rem; font-size: 1rem; font-weight: 500; color: var(--fg); cursor: pointer; }
+        label.radio small { color: var(--muted); font-weight: 400; }
+        input[type="radio"] { width: auto; height: auto; min-height: 0; accent-color: var(--primary); }
+        #compError { color: var(--danger); font-weight: 600; min-height: 1.5em; margin-top: .5rem; }
 
         /* Entry card: add competitor | enter result */
         .entry-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2.6fr); gap: 1.25rem 2rem; }
@@ -148,6 +167,19 @@
     <h1>Decathlon Web MVP</h1>
     <p class="sub">Add competitors, enter their results and follow the standings.</p>
 
+    <section class="card competition-bar" aria-label="Competition">
+        <div class="field">
+            <label for="competition">Competition</label>
+            <select id="competition" data-testid="competitionSelect"></select>
+        </div>
+        <span id="competitionType" class="badge" data-type="MIXED"></span>
+        <div class="actions">
+            <button id="newCompetitionBtn" class="btn primary" type="button" data-testid="newCompetitionBtn">New competition</button>
+            <button id="renameCompetitionBtn" class="btn" type="button" data-testid="renameCompetitionBtn">Rename</button>
+        </div>
+        <p id="competitionHint" class="hint"></p>
+    </section>
+
     <section class="card" aria-label="Competitors and results">
         <div class="entry-grid">
             <div class="block">
@@ -207,7 +239,7 @@
 
     <section class="card" aria-label="Standings">
         <div class="bar">
-            <div class="tabs" role="tablist" aria-label="Competition">
+            <div id="tabs" class="tabs" role="tablist" aria-label="Show events for">
                 <button id="tabDecathlon" type="button" role="tab" data-tab="DECATHLON" data-testid="tabDecathlon" aria-selected="true" aria-controls="tablePanel">
                     Decathlon <span class="count" id="countDecathlon">0</span>
                 </button>
@@ -247,6 +279,24 @@
     </form>
 </dialog>
 
+<dialog id="compDialog" data-testid="compDialog" aria-labelledby="compTitle">
+    <h2 id="compTitle">New competition</h2>
+    <div class="field">
+        <label for="compName">Competition name</label>
+        <input id="compName" data-testid="compNameInput" placeholder="e.g., Göteborg Open 2026" autocomplete="off" maxlength="60" />
+    </div>
+    <fieldset id="compTypeFields" class="type-fields">
+        <legend>Type</legend>
+        <label class="radio"><input type="radio" name="compType" value="DECATHLON" checked /> Decathlon <small>10 events</small></label>
+        <label class="radio"><input type="radio" name="compType" value="HEPTATHLON" /> Heptathlon <small>7 events</small></label>
+    </fieldset>
+    <div id="compError" data-testid="compError" aria-live="polite"></div>
+    <div class="dialog-actions">
+        <button id="compCancel" class="btn" type="button" data-testid="compCancelBtn">Cancel</button>
+        <button id="compSave" class="btn primary" type="button" data-testid="compSaveBtn">Create</button>
+    </div>
+</dialog>
+
 <dialog id="editDialog" data-testid="editDialog" aria-labelledby="editTitle">
     <h2 id="editTitle">Edit competitor</h2>
     <div class="field">
@@ -261,6 +311,6 @@
     </div>
 </dialog>
 
-<script src="app.js?v=5" type="module"></script>
+<script src="app.js?v=6" type="module"></script>
 </body>
 </html>

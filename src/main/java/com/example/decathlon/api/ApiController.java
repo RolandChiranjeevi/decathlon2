@@ -1,5 +1,7 @@
 package com.example.decathlon.api;
 
+import com.example.decathlon.core.Competition;
+import com.example.decathlon.core.CompetitionRegistry;
 import com.example.decathlon.core.CompetitionService;
 import com.example.decathlon.core.CoreException;
 import com.example.decathlon.core.ScoringService;
@@ -13,14 +15,18 @@ import org.springframework.web.bind.annotation.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Every competition route exists twice: /api/... acts on the default ("General") competition and
+ * /api/competitions/{id}/... on the one with that id.
+ */
 @RestController
-@RequestMapping("/api")
+@RequestMapping({"/api", "/api/competitions/{cid}"})
 public class ApiController {
-    private final CompetitionService comp;
+    private final CompetitionRegistry registry;
     private final ScoringService scoring;
 
-    public ApiController(CompetitionService comp, ScoringService scoring) {
-        this.comp = comp;
+    public ApiController(CompetitionRegistry registry, ScoringService scoring) {
+        this.registry = registry;
         this.scoring = scoring;
     }
 
@@ -41,50 +47,111 @@ public class ApiController {
         return list;
     }
 
+    // ---- Competitions ----
+
+    @GetMapping("/competitions")
+    public List<Map<String,Object>> competitions() {
+        List<Map<String,Object>> list = new ArrayList<>();
+        for (CompetitionService c : registry.list()) {
+            list.add(describe(c));
+        }
+        return list;
+    }
+
+    /** Creates a competition. Body: {"name": "Göteborg Open", "type": "DECATHLON"} (or HEPTATHLON). */
+    @PostMapping("/competitions")
+    public ResponseEntity<Map<String,Object>> createCompetition(@RequestBody Map<String,String> body) {
+        CompetitionService created = registry.create(body.get("name"), parseType(body.get("type")));
+        return ResponseEntity.status(201).body(describe(created));
+    }
+
+    /** Renames a competition. Body: {"name": "New name"}. */
+    @PostMapping("/name")
+    public ResponseEntity<Void> renameCompetition(@PathVariable(name = "cid", required = false) String cid,
+                                                  @RequestBody Map<String,String> body) {
+        registry.rename(cid, body.get("name"));
+        return ResponseEntity.noContent().build();
+    }
+
+    // ---- Competitors and results ----
+
     @PostMapping("/competitors")
-    public ResponseEntity<Void> add(@RequestBody Map<String,String> body) {
-        comp.addCompetitor(body.get("name"));
+    public ResponseEntity<Void> add(@PathVariable(name = "cid", required = false) String cid,
+                                    @RequestBody Map<String,String> body) {
+        registry.get(cid).addCompetitor(body.get("name"));
         return ResponseEntity.status(201).build();
     }
 
     /** Renames a competitor. Body: {"from": "Old name", "to": "New name"}. */
     @PostMapping("/competitors/rename")
-    public ResponseEntity<Void> rename(@RequestBody Map<String,String> body) {
-        comp.renameCompetitor(body.get("from"), body.get("to"));
+    public ResponseEntity<Void> rename(@PathVariable(name = "cid", required = false) String cid,
+                                       @RequestBody Map<String,String> body) {
+        registry.get(cid).renameCompetitor(body.get("from"), body.get("to"));
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/score")
-    public Map<String,Integer> score(@RequestBody ScoreReq r) {
-        int pts = comp.score(r.name(), r.event(), r.raw());
+    public Map<String,Integer> score(@PathVariable(name = "cid", required = false) String cid,
+                                     @RequestBody ScoreReq r) {
+        int pts = registry.get(cid).score(r.name(), r.event(), r.raw());
         return Map.of("points", pts);
     }
 
     @GetMapping("/standings")
-    public List<Map<String,Object>> standings() { return comp.standings(); }
+    public List<Map<String,Object>> standings(@PathVariable(name = "cid", required = false) String cid) {
+        return registry.get(cid).standings();
+    }
 
     @GetMapping("/export.csv")
-    public ResponseEntity<String> export() {
+    public ResponseEntity<String> export(@PathVariable(name = "cid", required = false) String cid) {
+        CompetitionService c = registry.get(cid);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName("results", "csv")))
+                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName(fileBase(c, "results"), "csv")))
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .body(comp.exportCsv());
+                .body(c.exportCsv());
     }
 
     /** Save: the whole competition as a JSON file. */
     @GetMapping("/state")
-    public ResponseEntity<String> saveState() {
+    public ResponseEntity<String> saveState(@PathVariable(name = "cid", required = false) String cid) {
+        CompetitionService c = registry.get(cid);
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName("decathlon-state", "json")))
+                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName(fileBase(c, "state"), "json")))
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(comp.exportState());
+                .body(c.exportState());
     }
 
     /** Resume: replaces the competition with an uploaded save. An invalid file gives 400 and changes nothing. */
     @PostMapping("/state")
-    public ResponseEntity<Void> loadState(@RequestBody String json) {
-        comp.importState(json);
+    public ResponseEntity<Void> loadState(@PathVariable(name = "cid", required = false) String cid,
+                                          @RequestBody String json) {
+        registry.get(cid).importState(json);
         return ResponseEntity.noContent().build();
+    }
+
+    private static Map<String,Object> describe(CompetitionService c) {
+        Map<String,Object> m = new LinkedHashMap<>();
+        m.put("id", c.id());
+        m.put("name", c.name());
+        m.put("type", c.type() == null ? null : c.type().name());
+        m.put("competitors", c.competitorCount());
+        return m;
+    }
+
+    private static Competition parseType(String type) {
+        try {
+            return Competition.valueOf(type == null ? "" : type.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new CoreException(CoreException.Kind.INVALID, "Type must be Decathlon or Heptathlon");
+        }
+    }
+
+    /** The default competition keeps the plain file names; named ones are prefixed with their name. */
+    private static String fileBase(CompetitionService c, String kind) {
+        if (CompetitionRegistry.DEFAULT_ID.equals(c.id())) {
+            return "state".equals(kind) ? "decathlon-state" : kind;
+        }
+        return CompetitionService.slug(c.name()) + "-" + kind;
     }
 
     private static String attachment(String fileName) {

@@ -59,6 +59,16 @@ const eventById = (id) => ALL_EVENTS.find(e => e.id === id);
 const unitOf = (e) => e.label.match(/\(([^)]*)\)$/)?.[1] ?? '';
 const titleOf = (e) => e.label.replace(/ \(.*\)$/, '');
 const competitionLabel = (c) => (c === 'HEPTATHLON' ? 'Heptathlon' : 'Decathlon');
+const typeLabel = (t) => (t === 'DECATHLON' ? 'Decathlon' : t === 'HEPTATHLON' ? 'Heptathlon' : 'Mixed');
+
+// ---- Competitions: each has its own competitors and results; the selected one is remembered ----
+let competitions = [];
+let currentId = (() => {
+  try { return localStorage.getItem('competition') || 'default'; } catch (e) { return 'default'; }
+})();
+const currentCompetition = () => competitions.find(c => c.id === currentId);
+// The default competition keeps the plain /api/... routes; the others live under /api/competitions/{id}.
+const api = (path) => (currentId === 'default' ? `/api${path}` : `/api/competitions/${encodeURIComponent(currentId)}${path}`);
 
 // Allowed ranges come from the server, so the rules live in one place.
 let ranges = {};
@@ -199,7 +209,7 @@ el('event').addEventListener('change', () => { updateUnit(); loadStoredResult();
 el('add').addEventListener('click', async () => {
   const name = el('name').value;
   try {
-    const res = await fetch('/api/competitors', {
+    const res = await fetch(api('/competitors'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
     });
@@ -251,7 +261,7 @@ el('save').addEventListener('click', async () => {
         return;
       }
     }
-    const res = await fetch('/api/score', {
+    const res = await fetch(api('/score'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
@@ -284,7 +294,7 @@ async function download(url, type, fallbackName) {
 
 el('export').addEventListener('click', async () => {
   try {
-    await download('/api/export.csv', 'text/csv;charset=utf-8', 'results.csv');
+    await download(api('/export.csv'), 'text/csv;charset=utf-8', 'results.csv');
     sortBroken = true;
   } catch (e) {
     setError('Export failed');
@@ -293,7 +303,7 @@ el('export').addEventListener('click', async () => {
 
 el('saveState').addEventListener('click', async () => {
   try {
-    await download('/api/state', 'application/json', 'decathlon-state.json');
+    await download(api('/state'), 'application/json', 'decathlon-state.json');
     setMsg('State saved');
   } catch (e) {
     setError('Could not save state');
@@ -305,7 +315,7 @@ el('loadState').addEventListener('change', async (ev) => {
   const file = ev.target.files[0];
   if (!file) return;
   try {
-    const res = await fetch('/api/state', {
+    const res = await fetch(api('/state'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: await file.text()
     });
@@ -328,10 +338,16 @@ const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/>
 
 async function renderStandings(focusName) {
   try {
-    const res = await fetch('/api/standings');
+    const res = await fetch(api('/standings'));
+    if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
 
     lastStandings = sortBroken ? data : data.sort((a, b) => (b.total || 0) - (a.total || 0));
+    const current = currentCompetition();
+    if (current) {
+      current.competitors = lastStandings.length;
+      renderCompetitionBar();
+    }
 
     if (!tabChosen) {
       // First look at the data: open on the competition that has competitors.
@@ -364,9 +380,10 @@ function renderTable() {
 
   const rows = visibleRows(tab);
   el('standings').innerHTML = rows.map(r => {
-    const pos = r.competition
-      ? `<span class="pos pos-${r.position <= 3 ? r.position : 'n'}">${r.position}</span>`
-      : '<span class="pos pos-n">–</span>';
+    // No position until the competitor has a result.
+    const pos = r.position == null
+      ? '<span class="pos pos-n">–</span>'
+      : `<span class="pos pos-${r.position <= 3 ? r.position : 'n'}">${r.position}</span>`;
     const cells = events.map(e => {
       const points = r.scores?.[e.id];
       if (points === undefined) return '<td class="num"></td>';
@@ -453,7 +470,7 @@ el('editSave').addEventListener('click', async () => {
     const newName = el('editName').value.trim();
     if (newName !== editing.name) {
       failing = el('editName');
-      await postJson('/api/competitors/rename', { from: editing.name, to: newName });
+      await postJson(api('/competitors/rename'), { from: editing.name, to: newName });
       editing.name = newName;
     }
     for (const input of el('editResults').querySelectorAll('input[data-event]')) {
@@ -462,7 +479,7 @@ el('editSave').addEventListener('click', async () => {
       failing = input;
       if (Number.isNaN(value)) throw new Error(`Result for ${titleOf(eventById(id))} is required`);
       if (value !== editing.raw[id]) {
-        await postJson('/api/score', { name: editing.name, event: id, raw: value });
+        await postJson(api('/score'), { name: editing.name, event: id, raw: value });
         editing.raw[id] = value;
       }
     }
@@ -476,8 +493,107 @@ el('editSave').addEventListener('click', async () => {
   }
 });
 
+// ---- Competition switcher and the New / Rename dialog ----
+function renderCompetitionBar() {
+  const select = el('competition');
+  select.innerHTML = competitions.map(c =>
+    `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)} · ${typeLabel(c.type)} (${c.competitors})</option>`).join('');
+  select.value = currentId;
+  const c = currentCompetition();
+  el('competitionType').textContent = typeLabel(c?.type);
+  el('competitionType').dataset.type = c?.type || 'MIXED';
+  el('competitionHint').textContent = c && !c.type
+    ? 'General is the default list and can hold decathletes and heptathletes together. Create a named competition to keep them apart.'
+    : '';
+}
+
+// A named competition has one type: the discipline is fixed and there is nothing to switch between in the table.
+function applyCompetition() {
+  const typed = currentCompetition()?.type || null;
+  el('tabs').hidden = !!typed;
+  el('discipline').disabled = !!typed;
+  el('discipline').title = typed ? `This is a ${typeLabel(typed)} competition` : '';
+  if (typed) {
+    tab = typed;
+    tabChosen = true;
+    el('discipline').value = typed.toLowerCase();
+    populateEvents();
+  }
+  renderCompetitionBar();
+}
+
+async function switchCompetition(id) {
+  currentId = id;
+  try { localStorage.setItem('competition', id); } catch (e) { /* the choice just isn't remembered */ }
+  lastStandings = [];
+  tab = 'DECATHLON';
+  tabChosen = false;
+  for (const field of ['name', 'name2', 'raw']) el(field).value = '';
+  setMsg('');
+  applyCompetition();
+  await renderStandings();
+}
+
+async function loadCompetitions() {
+  try {
+    const res = await fetch('/api/competitions');
+    competitions = await res.json();
+  } catch (e) {
+    competitions = [];
+  }
+  if (!competitions.some(c => c.id === currentId)) currentId = 'default';
+  applyCompetition();
+}
+
+el('competition').addEventListener('change', (ev) => switchCompetition(ev.target.value));
+
+let compMode = 'create';
+function openCompDialog(mode) {
+  compMode = mode;
+  el('compTitle').textContent = mode === 'create' ? 'New competition' : 'Rename competition';
+  el('compSave').textContent = mode === 'create' ? 'Create' : 'Save';
+  el('compTypeFields').hidden = mode !== 'create';
+  el('compName').value = mode === 'create' ? '' : (currentCompetition()?.name ?? '');
+  el('compName').removeAttribute('aria-invalid');
+  el('compError').textContent = '';
+  el('compDialog').showModal();
+  el('compName').select();
+}
+
+el('newCompetitionBtn').addEventListener('click', () => openCompDialog('create'));
+el('renameCompetitionBtn').addEventListener('click', () => openCompDialog('rename'));
+el('compCancel').addEventListener('click', () => el('compDialog').close());
+el('compName').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') { ev.preventDefault(); el('compSave').click(); }
+});
+
+el('compSave').addEventListener('click', async () => {
+  const name = el('compName').value.trim();
+  try {
+    if (compMode === 'create') {
+      const type = document.querySelector('input[name="compType"]:checked').value;
+      const created = await (await postJson('/api/competitions', { name, type })).json();
+      competitions.push(created);
+      el('compDialog').close();
+      await switchCompetition(created.id);
+      setMsg(`Created ${created.name}`);
+    } else {
+      await postJson(api('/name'), { name });
+      currentCompetition().name = name;
+      el('compDialog').close();
+      renderCompetitionBar();
+      setMsg('Competition renamed');
+    }
+  } catch (e) {
+    el('compError').textContent = e.message;
+    el('compName').setAttribute('aria-invalid', 'true');
+  }
+});
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
 
-renderStandings();
+// Headers appear at once; the data follows when the competition list and standings have loaded.
+renderTable();
+loadCompetitions().then(() => renderStandings());
