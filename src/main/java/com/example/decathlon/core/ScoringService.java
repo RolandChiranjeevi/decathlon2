@@ -17,8 +17,9 @@ public class ScoringService {
 
     public ScoringService() {
         Competition dec = Competition.DECATHLON;
-        track("100m", "100m", dec, 25.4347, 18.0, 1.81, 5, 17.8);
-        track("110mHurdles", "110m Hurdles", dec, 5.74352, 28.5, 1.92, 10, 28.5);
+        // The upper limit of a track event is above B so a slow result is saved and scores 0 points.
+        track("100m", "100m", dec, 25.4347, 18.0, 1.81, 5, 30);
+        track("110mHurdles", "110m Hurdles", dec, 5.74352, 28.5, 1.92, 10, 45);
         track("400m", "400m", dec, 1.53775, 82.0, 1.81, 20, 100);
         track("1500m", "1500m", dec, 0.03768, 480.0, 1.85, 150, 600);
         field("longJump", "Long Jump", dec, 0.14354, 220.0, 1.4, "cm", 0, 1000);
@@ -30,7 +31,7 @@ public class ScoringService {
 
         Competition hep = Competition.HEPTATHLON;
         track("hep100mHurdles", "100m Hurdles", hep, 9.23076, 26.7, 1.835, 10, 30);
-        track("hep200m", "200m", hep, 4.99087, 42.5, 1.81, 15, 40);
+        track("hep200m", "200m", hep, 4.99087, 42.5, 1.81, 15, 55);
         track("hep800m", "800m", hep, 0.11193, 254.0, 1.88, 90, 300);
         field("hepLongJump", "Long Jump", hep, 0.188807, 210.0, 1.41, "cm", 0, 1000);
         field("hepHighJump", "High Jump", hep, 1.84523, 75.0, 1.348, "cm", 0, 250);
