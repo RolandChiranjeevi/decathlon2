@@ -107,6 +107,7 @@
 
         .with-unit { position: relative; }
         .with-unit input { padding-right: 2.6rem; }
+        .with-unit.no-unit input { padding-right: .6rem; }
         .with-unit .unit { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
 
         /* Every dropdown (competition, discipline, event, competitor) shares this look:
@@ -265,7 +266,7 @@
                     <div class="field w-result">
                         <label for="raw">Result</label>
                         <div class="with-unit">
-                            <input id="raw" data-testid="rawInput" type="number" step="0.01" />
+                            <input id="raw" data-testid="rawInput" type="text" inputmode="decimal" autocomplete="off" />
                             <span id="unit" class="unit" aria-hidden="true"></span>
                         </div>
                     </div>
@@ -356,6 +357,6 @@
     </div>
 </dialog>
 
-<script src="app.js?v=8" type="module"></script>
+<script src="app.js?v=9" type="module"></script>
 </body>
 </html>

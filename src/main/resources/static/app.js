@@ -86,6 +86,42 @@ const ALL_EVENTS = [
 const eventById = (id) => ALL_EVENTS.find(e => e.id === id);
 const unitOf = (e) => e.label.match(/\(([^)]*)\)$/)?.[1] ?? '';
 const titleOf = (e) => e.label.replace(/ \(.*\)$/, '');
+
+// ---- Times: a result in seconds can be typed as seconds (163) or as minutes:seconds (2:43, 2:43.5) ----
+// The page converts to seconds before sending; the server and the scoring only ever see seconds.
+const round2 = (x) => Math.round(x * 100) / 100;
+
+// 163 -> "2:43", 163.5 -> "2:43.5", 65.07 -> "1:05.07"
+function formatTime(total) {
+  const rounded = round2(total);
+  const minutes = Math.floor(rounded / 60);
+  const rest = round2(rounded - minutes * 60);
+  const [whole, fraction = ''] = rest.toFixed(2).split('.');
+  const hundredths = fraction.replace(/0+$/, '');
+  return `${minutes}:${whole.padStart(2, '0')}${hundredths ? '.' + hundredths : ''}`;
+}
+
+// The number a result field holds, or NaN if it is empty or not understood.
+// "163", "163.5" and "163,5" work for every event; "2:43" and "2:43.5" for events measured in seconds.
+function parseResult(text, unit) {
+  const t = String(text).trim().replace(',', '.');
+  if (/^-?(\d+\.?\d*|\.\d+)$/.test(t)) return parseFloat(t);
+  const m = unit === 's' ? /^(\d+):([0-5]?\d)(\.\d+)?$/.exec(t) : null;
+  return m ? round2(parseInt(m[1], 10) * 60 + parseFloat(m[2] + (m[3] || ''))) : NaN;
+}
+
+const unitFor = (eventId) => { const e = eventById(eventId); return e ? unitOf(e) : ''; };
+// Times of a minute or more read better as m:ss.
+const isMinuteTime = (eventId, value) => unitFor(eventId) === 's' && value >= 60;
+// What goes in the Result box when a stored result is loaded.
+const resultText = (eventId, value) => (isMinuteTime(eventId, value) ? formatTime(value) : String(value));
+// A result in words: "2:43 (163 s)" for a long time, the plain number otherwise.
+const resultInWords = (eventId, value) => (isMinuteTime(eventId, value) ? `${formatTime(value)} (${value} s)` : String(value));
+// Events that can pass a minute (400m, 800m, 1500m) get the m:ss help; the range comes from the server.
+const canPassMinute = (eventId) => { const r = ranges[eventId]; return !!r && r.unit === 's' && r.max >= 60; };
+const badResultMessage = (eventId) => (unitFor(eventId) === 's'
+  ? 'Enter the result in seconds (163) or as minutes:seconds (2:43).'
+  : 'Enter the result as a number.');
 const competitionLabel = (c) => (c === 'HEPTATHLON' ? 'Heptathlon' : 'Decathlon');
 const typeLabel = (t) => (t === 'DECATHLON' ? 'Decathlon' : t === 'HEPTATHLON' ? 'Heptathlon' : 'Mixed');
 
@@ -106,10 +142,39 @@ fetch('/api/events')
   .catch(() => {});
 
 function updateUnit() {
-  const e = eventById(el('event').value);
-  el('unit').textContent = e ? unitOf(e) : '';
-  const r = ranges[el('event').value];
-  el('rangeHint').textContent = r ? `Allowed range: ${r.min} to ${r.max} ${r.unit}` : '';
+  const id = el('event').value;
+  const minutes = canPassMinute(id);
+  // For events that can pass a minute the box takes seconds or m:ss, so a unit suffix would mislead.
+  el('unit').textContent = minutes ? '' : unitFor(id);
+  el('unit').parentElement.classList.toggle('no-unit', minutes);
+  el('raw').placeholder = minutes ? '2:43 or 163' : '';
+  el('raw').inputMode = minutes ? 'text' : 'decimal';   // the phone's number pad has no colon
+  updateHint();
+}
+
+// "Allowed range: ..." plus, while typing, what the typed result means in the other notation.
+function updateHint() {
+  const id = el('event').value;
+  const r = ranges[id];
+  let text = '';
+  if (r) {
+    text = canPassMinute(id)
+      ? `Allowed range: ${formatTime(r.min)} to ${formatTime(r.max)} (${r.min} to ${r.max} s)`
+      : `Allowed range: ${r.min} to ${r.max} ${r.unit}`;
+  }
+  const echo = typedResultEcho(id);
+  el('rangeHint').textContent = echo ? (text ? `${text} · ${echo}` : echo) : text;
+}
+
+function typedResultEcho(eventId) {
+  const typed = el('raw').value;
+  if (!typed.trim()) return '';
+  const unit = unitFor(eventId);
+  const value = parseResult(typed, unit);
+  if (Number.isNaN(value)) return unit === 's' ? 'Use seconds or m:ss, for example 2:43' : 'Enter a number';
+  if (unit === 's' && typed.includes(':')) return `= ${value} s`;
+  if (isMinuteTime(eventId, value) && canPassMinute(eventId)) return `= ${formatTime(value)}`;
+  return '';
 }
 
 function populateEvents(preferred) {
@@ -140,7 +205,8 @@ function setTab(competition) {
 // Loads the stored result for the chosen competitor and event into the form, so it can be changed.
 function loadStoredResult() {
   const stored = findRow(el('name2').value)?.raw?.[el('event').value];
-  if (stored !== undefined) el('raw').value = stored;
+  if (stored !== undefined) el('raw').value = resultText(el('event').value, stored);
+  updateHint();
 }
 
 // Follows the competitor's competition: the discipline select and the visible table.
@@ -233,6 +299,7 @@ combo.list.addEventListener('mousedown', (ev) => {
 combo.input.addEventListener('blur', closeCombo);
 combo.input.addEventListener('change', () => { syncFromName(); loadStoredResult(); });
 el('event').addEventListener('change', () => { updateUnit(); loadStoredResult(); });
+el('raw').addEventListener('input', updateHint);
 
 // ---- Add competitor ----
 el('add').addEventListener('click', async () => {
@@ -273,8 +340,13 @@ el('save').addEventListener('click', async () => {
   const body = {
     name: el('name2').value,
     event: el('event').value,
-    raw: parseFloat(el('raw').value)
+    raw: parseResult(el('raw').value, unitFor(el('event').value))
   };
+  // An empty box is left to the server ("Result is required"); something typed that isn't a result is caught here.
+  if (el('raw').value.trim() !== '' && Number.isNaN(body.raw)) {
+    setError(badResultMessage(body.event), el('raw'));
+    return;
+  }
   try {
     // Replacing a different result needs a yes. Saving the same value again changes nothing, so it just saves.
     await renderStandings();
@@ -283,8 +355,8 @@ el('save').addEventListener('click', async () => {
     if (oldRaw !== undefined && !Number.isNaN(body.raw) && oldRaw !== body.raw) {
       const event = eventById(body.event);
       const replace = await askOverwrite(
-        `${row.name} already has a result for ${event?.label ?? body.event}: ${oldRaw} (${row.scores[body.event]} pts). ` +
-        `Replace it with ${body.raw}?`);
+        `${row.name} already has a result for ${event?.label ?? body.event}: ${resultInWords(body.event, oldRaw)} (${row.scores[body.event]} pts). ` +
+        `Replace it with ${resultInWords(body.event, body.raw)}?`);
       if (!replace) {
         setMsg('Kept the existing result');
         return;
@@ -433,7 +505,8 @@ function renderTable() {
       if (points === undefined) return '<td class="num"></td>';
       const raw = r.raw?.[e.id];
       // The raw result is drawn from data-raw (CSS), so the cell's own text stays the points.
-      return `<td class="num" data-raw="${raw === undefined ? '' : escapeHtml(`${raw} ${unitOf(e)}`)}">${points}</td>`;
+      const shown = raw === undefined ? '' : (isMinuteTime(e.id, raw) ? formatTime(raw) : `${raw} ${unitOf(e)}`);
+      return `<td class="num" data-raw="${escapeHtml(shown)}">${points}</td>`;
     }).join('');
     return `<tr data-name="${escapeHtml(r.name)}">
       <td>${pos}</td>
@@ -500,7 +573,8 @@ function openEdit(name) {
   const events = ALL_EVENTS.filter(e => row.scores?.[e.id] !== undefined);
   el('editResults').innerHTML = events.length
     ? events.map(e => `<div class="field"><label for="edit-${e.id}">${titleOf(e)} (${unitOf(e)})</label>
-        <input id="edit-${e.id}" type="number" step="0.01" data-event="${e.id}" data-testid="edit-${e.id}" value="${row.raw?.[e.id] ?? ''}"></div>`).join('')
+        <input id="edit-${e.id}" type="text" inputmode="${canPassMinute(e.id) ? 'text' : 'decimal'}" autocomplete="off" data-event="${e.id}" data-testid="edit-${e.id}"
+               value="${row.raw?.[e.id] === undefined ? '' : escapeHtml(resultText(e.id, row.raw[e.id]))}"></div>`).join('')
     : '<p class="hint">No results yet. Use "Enter result" to add one.</p>';
   el('editDialog').showModal();
 }
@@ -519,9 +593,10 @@ el('editSave').addEventListener('click', async () => {
     }
     for (const input of el('editResults').querySelectorAll('input[data-event]')) {
       const id = input.dataset.event;
-      const value = parseFloat(input.value);
+      const value = parseResult(input.value, unitFor(id));
       failing = input;
-      if (Number.isNaN(value)) throw new Error(`Result for ${titleOf(eventById(id))} is required`);
+      if (input.value.trim() === '') throw new Error(`Result for ${titleOf(eventById(id))} is required`);
+      if (Number.isNaN(value)) throw new Error(`${titleOf(eventById(id))}: ${badResultMessage(id)}`);
       if (value !== editing.raw[id]) {
         await postJson(api('/score'), { name: editing.name, event: id, raw: value });
         editing.raw[id] = value;
