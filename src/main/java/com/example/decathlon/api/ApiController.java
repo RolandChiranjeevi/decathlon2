@@ -90,6 +90,14 @@ public class ApiController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Removes a competitor and their results. Body: {"name": "Name"}. */
+    @PostMapping("/competitors/remove")
+    public ResponseEntity<Void> remove(@PathVariable(name = "cid", required = false) String cid,
+                                       @RequestBody Map<String,String> body) {
+        registry.get(cid).removeCompetitor(body.get("name"));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/score")
     public Map<String,Integer> score(@PathVariable(name = "cid", required = false) String cid,
                                      @RequestBody ScoreReq r) {

@@ -581,6 +581,34 @@ function openEdit(name) {
 
 el('editCancel').addEventListener('click', () => el('editDialog').close());
 
+// Removing needs a second click, so a stray click cannot delete someone's results.
+const REMOVE_LABEL = 'Remove competitor';
+function resetRemove() {
+  el('editRemove').classList.remove('confirming');
+  el('editRemove').textContent = REMOVE_LABEL;
+}
+el('editDialog').addEventListener('close', resetRemove);
+
+el('editRemove').addEventListener('click', async () => {
+  const button = el('editRemove');
+  if (!button.classList.contains('confirming')) {
+    button.classList.add('confirming');
+    button.textContent = 'Confirm remove';
+    return;
+  }
+  const removed = editing.name;
+  try {
+    await postJson(api('/competitors/remove'), { name: removed });
+    el('editDialog').close();
+    if (el('name2').value.trim() === removed) { el('name2').value = ''; syncFromName(); }
+    setMsg(`Removed ${removed}`);
+    await renderStandings();
+  } catch (e) {
+    resetRemove();
+    el('editError').textContent = e.message;
+  }
+});
+
 el('editSave').addEventListener('click', async () => {
   let failing = null;
   el('editDialog').querySelectorAll('[aria-invalid]').forEach(n => n.removeAttribute('aria-invalid'));

@@ -134,6 +134,11 @@ public class CompetitionService {
         competitors.putAll(renamed);
     }
 
+    /** Removes a competitor together with all their results. Fails if the competitor does not exist. */
+    public synchronized void removeCompetitor(String name) {
+        competitors.remove(find(name).name);
+    }
+
     /** The stored raw result, or null if there is none. */
     public synchronized Double raw(String name, String eventId) {
         Competitor c = competitors.get(name == null ? "" : name.trim());
