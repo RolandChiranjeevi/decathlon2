@@ -19,6 +19,33 @@ function setMsg(text) {
   clearInvalid();
 }
 
+// ---- Light / dark mode: the button overrides the system setting and the choice is remembered ----
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const label = `Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`;
+  el('themeToggle').setAttribute('aria-label', label);
+  el('themeToggle').title = label;
+}
+
+el('themeToggle').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem('theme', next); } catch (e) { /* the choice just isn't remembered */ }
+  applyTheme(next);
+});
+
+// Until the button has been used, follow the system when it changes. The check also runs when the tab
+// regains focus, in case the browser did not send the change event.
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+function followSystem() {
+  try { if (localStorage.getItem('theme')) return; } catch (e) { /* fall through and follow the system */ }
+  applyTheme(systemDark.matches ? 'dark' : 'light');
+}
+systemDark.addEventListener('change', followSystem);
+window.addEventListener('focus', followSystem);
+document.addEventListener('visibilitychange', followSystem);
+
+applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+
 // Which "Enter result" field a server message is about.
 function resultFieldFor(text) {
   if (/competing in/i.test(text)) return el('discipline');
@@ -337,6 +364,12 @@ el('loadState').addEventListener('change', async (ev) => {
 
 // ---- Standings ----
 const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const MEDAL_NAMES = { 1: 'Gold', 2: 'Silver', 3: 'Bronze' };
+// A medal on a ribbon, as an SVG so it looks the same everywhere. Its text is only the label, never the number.
+const medal = (place) =>
+  `<svg class="medal medal-${place}" viewBox="0 0 24 24" role="img" aria-label="${MEDAL_NAMES[place]} medal">` +
+  '<path class="ribbon" d="M6.5 2h4l3.5 8h-4z"/><path class="ribbon" d="M17.5 2h-4L10 10h4z"/>' +
+  '<circle class="disc" cx="12" cy="15.5" r="6.5"/><circle class="shine" cx="12" cy="15.5" r="4"/></svg>';
 // Column widths in rem. They are the same for every competition (see renderTable).
 const COLUMN_REM = { pos: 3.5, name: 11, total: 5, act: 3.5, event: 5 };
 
@@ -391,9 +424,10 @@ function renderTable() {
   const rows = visibleRows(tab);
   el('standings').innerHTML = rows.map(r => {
     // No position until the competitor has a result.
+    // Places 1-3 get a medal in front of the number; a tie shares the medal because it shares the place.
     const pos = r.position == null
       ? '<span class="pos pos-n">–</span>'
-      : `<span class="pos pos-${r.position <= 3 ? r.position : 'n'}">${r.position}</span>`;
+      : `<span class="pos${r.position <= 3 ? '' : ' pos-n'}">${r.position <= 3 ? medal(r.position) : ''}${r.position}</span>`;
     const cells = events.map(e => {
       const points = r.scores?.[e.id];
       if (points === undefined) return '<td class="num"></td>';
