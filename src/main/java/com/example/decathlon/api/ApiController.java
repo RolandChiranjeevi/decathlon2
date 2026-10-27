@@ -25,6 +25,13 @@ public class ApiController {
         return ResponseEntity.status(201).build();
     }
 
+    /** Renames a competitor. Body: {"from": "Old name", "to": "New name"}. */
+    @PostMapping("/competitors/rename")
+    public ResponseEntity<Void> rename(@RequestBody Map<String,String> body) {
+        comp.renameCompetitor(body.get("from"), body.get("to"));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/score")
     public Map<String,Integer> score(@RequestBody ScoreReq r) {
         int pts = comp.score(r.name(), r.event(), r.raw());

@@ -28,6 +28,22 @@ const HEPTATHLON_EVENTS = [
   ['hepJavelinThrow', 'Javelin Throw (m)']
 ];
 
+// Every event, in table order. The standings table has one column per event.
+const ALL_EVENTS = [
+  ...DECATHLON_EVENTS.map(([id, label]) => ({ id, label, hep: false })),
+  ...HEPTATHLON_EVENTS.map(([id, label]) => ({ id, label, hep: true }))
+];
+const eventById = (id) => ALL_EVENTS.find(e => e.id === id);
+const columnTitle = (e) => (e.hep ? 'Hep ' : '') + e.label.replace(/ \(.*\)$/, '');
+
+el('standingsHead').innerHTML = [
+  '<th scope="col">Name</th>',
+  ...ALL_EVENTS.map(e => `<th scope="col"${e.hep ? ' class="hep"' : ''}>${columnTitle(e)}</th>`),
+  '<th scope="col">Total</th>',
+  '<th scope="col">Position</th>',
+  '<th scope="col">Actions</th>'
+].join('');
+
 function populateEvents() {
   const events = el('discipline').value === 'heptathlon' ? HEPTATHLON_EVENTS : DECATHLON_EVENTS;
   el('event').innerHTML = events.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
@@ -55,6 +71,17 @@ el('add').addEventListener('click', async () => {
   }
 });
 
+// Resolves true when the user picks "Yes" in the modal, false for "No" or Escape.
+function askOverwrite(text) {
+  const dialog = el('overwriteDialog');
+  el('overwriteText').textContent = text;
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes'), { once: true });
+    dialog.showModal();
+  });
+}
+
 el('save').addEventListener('click', async () => {
   const body = {
     name: el('name2').value,
@@ -62,6 +89,20 @@ el('save').addEventListener('click', async () => {
     raw: parseFloat(el('raw').value)
   };
   try {
+    // Replacing a different result needs a yes. Saving the same value again changes nothing, so it just saves.
+    await renderStandings();
+    const row = lastStandings.find(r => r.name === body.name.trim());
+    const oldRaw = row?.raw?.[body.event];
+    if (oldRaw !== undefined && !Number.isNaN(body.raw) && oldRaw !== body.raw) {
+      const event = eventById(body.event);
+      const replace = await askOverwrite(
+        `${row.name} already has a result for ${event?.label ?? body.event}: ${oldRaw} (${row.scores[body.event]} pts). ` +
+        `Replace it with ${body.raw}?`);
+      if (!replace) {
+        setMsg('Kept the existing result');
+        return;
+      }
+    }
     const res = await fetch('/api/score', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -141,15 +182,17 @@ async function renderStandings() {
     const rows = (sortBroken ? data : data.sort((a,b)=> (b.total||0)-(a.total||0)))
       .map(r => `<tr data-name="${escapeHtml(r.name)}" title="${escapeHtml(describeRow(r))}">
         <td>${escapeHtml(r.name)}</td>
-        <td>${r.scores?.["100m"] ?? ''}</td>
-        <td>${r.scores?.["longJump"] ?? ''}</td>
-        <td>${r.scores?.["shotPut"] ?? ''}</td>
-        <td>${r.scores?.["400m"] ?? ''}</td>
-        <td>${r.total ?? 0}</td>
-        <td>${r.position ?? ''}</td>
+        ${ALL_EVENTS.map(e => `<td${e.hep ? ' class="hep"' : ''}>${r.scores?.[e.id] ?? ''}</td>`).join('')}
+        <td class="total">${r.total ?? 0}</td>
+        <td class="pos">${r.position ?? ''}</td>
+        <td><button type="button" class="edit" data-testid="editBtn" aria-label="Edit ${escapeHtml(r.name)}">Edit</button></td>
       </tr>`).join('');
 
     el('standings').innerHTML = rows;
+
+    // The name box on "Enter result" offers every competitor added so far.
+    el('competitorList').innerHTML = data.map(r => r.name).sort((a, b) => a.localeCompare(b))
+      .map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
   } catch (e) {
     setError('Could not load standings');
   }
@@ -170,13 +213,73 @@ function loadStoredResult() {
   if (stored !== undefined) el('raw').value = stored;
 }
 
+el('name2').addEventListener('change', loadStoredResult);
+el('event').addEventListener('change', loadStoredResult);
+
 el('standings').addEventListener('click', (ev) => {
   const tr = ev.target.closest('tr');
   if (!tr) return;
+  if (ev.target.closest('button.edit')) {
+    openEdit(tr.dataset.name);
+    return;
+  }
   el('name2').value = tr.dataset.name;
   loadStoredResult();
 });
-el('event').addEventListener('change', loadStoredResult);
+
+// Edit dialog: rename a competitor and change any of their results in one go.
+let editing = null;
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error((await res.text()) || 'Request failed');
+  return res;
+}
+
+function openEdit(name) {
+  const row = lastStandings.find(r => r.name === name);
+  if (!row) return;
+  editing = { name: row.name, raw: { ...(row.raw || {}) } };
+  el('editName').value = row.name;
+  el('editError').textContent = '';
+  const events = ALL_EVENTS.filter(e => row.scores?.[e.id] !== undefined);
+  el('editResults').innerHTML = events.length
+    ? events.map(e => `<label>${columnTitle(e)} (${e.label.match(/\(([^)]*)\)$/)?.[1] ?? ''})
+        <input type="number" step="0.01" data-event="${e.id}" data-testid="edit-${e.id}"
+               value="${row.raw?.[e.id] ?? ''}"></label>`).join('')
+    : '<p>No results yet. Use "Enter result" to add one.</p>';
+  el('editDialog').showModal();
+}
+
+el('editCancel').addEventListener('click', () => el('editDialog').close());
+
+el('editSave').addEventListener('click', async () => {
+  try {
+    const newName = el('editName').value.trim();
+    if (newName !== editing.name) {
+      await postJson('/api/competitors/rename', { from: editing.name, to: newName });
+      editing.name = newName;
+    }
+    for (const input of el('editResults').querySelectorAll('input[data-event]')) {
+      const id = input.dataset.event;
+      const value = parseFloat(input.value);
+      if (Number.isNaN(value)) throw new Error(`Result for ${columnTitle(eventById(id))} is required`);
+      if (value !== editing.raw[id]) {
+        await postJson('/api/score', { name: editing.name, event: id, raw: value });
+        editing.raw[id] = value;
+      }
+    }
+    el('editDialog').close();
+    setMsg('Changes saved');
+  } catch (e) {
+    el('editError').textContent = e.message;
+  } finally {
+    await renderStandings();
+  }
+});
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

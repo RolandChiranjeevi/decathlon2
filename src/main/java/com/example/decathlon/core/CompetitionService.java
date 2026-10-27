@@ -29,7 +29,7 @@ public class CompetitionService {
     public record Result(Double raw, int points) {}
 
     public static class Competitor {
-        private final String name;
+        private String name;
         private Competition competition;
         private final Map<String, Result> results = new LinkedHashMap<>();
 
@@ -79,6 +79,30 @@ public class CompetitionService {
         assign(c, event.competition());
         c.results.put(eventId, new Result(raw, pts));
         return pts;
+    }
+
+    /**
+     * Renames a competitor, keeping their results and their place in the list.
+     * The new name follows the same rules as any name and must not belong to someone else.
+     */
+    public synchronized void renameCompetitor(String from, String to) {
+        Competitor c = find(from);
+        String newName = validateName(to);
+        if (newName.equals(c.name)) return;
+        if (competitors.containsKey(newName)) {
+            throw new CoreException(CoreException.Kind.INVALID, "Competitor already exists: " + newName);
+        }
+        Map<String, Competitor> renamed = new LinkedHashMap<>();
+        for (Map.Entry<String, Competitor> entry : competitors.entrySet()) {
+            if (entry.getValue() == c) {
+                c.name = newName;
+                renamed.put(newName, c);
+            } else {
+                renamed.put(entry.getKey(), entry.getValue());
+            }
+        }
+        competitors.clear();
+        competitors.putAll(renamed);
     }
 
     /** The stored raw result, or null if there is none. */

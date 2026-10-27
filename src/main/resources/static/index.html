@@ -5,67 +5,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Decathlon Web MVP</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+        :root { --line: #e3e3e3; --soft: #f6f7f9; --hep: #fdf3f7; --accent: #1a56db; }
+        body { font-family: system-ui, sans-serif; max-width: 1800px; margin: 1.5rem auto; padding: 0 1.25rem; }
+        .top { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; }
         .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; flex-wrap: wrap; }
+        .row.end { justify-content: flex-end; margin-top: 1rem; }
         .card { border: 1px solid #ddd; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border-bottom: 1px solid #eee; padding: .5rem; text-align: left; }
-        #error { color: #b00020; }
+        .card h2 { margin-top: 0; }
+        .error, #error { color: #b00020; min-height: 1.2em; }
+        #msg { min-height: 1.2em; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        th, td { border-bottom: 1px solid #eee; padding: .4rem .45rem; text-align: center; white-space: nowrap; }
+        th { background: var(--soft); font-weight: 600; white-space: normal; vertical-align: bottom; line-height: 1.2; }
+        th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: #fff; }
+        th:first-child { background: var(--soft); }
+        th.hep, td.hep { background: var(--hep); }
+        td.total, td.pos { font-weight: 700; }
+        tbody tr[data-name] { cursor: pointer; }
+        tbody tr[data-name]:hover td { background: #f0f5ff; }
+        button.edit { font-size: .8rem; padding: .15rem .6rem; }
+
+        dialog { border: 1px solid #bbb; border-radius: 12px; padding: 1.25rem 1.5rem; max-width: 560px; width: calc(100% - 2rem); }
+        dialog::backdrop { background: rgba(0, 0, 0, .4); }
+        dialog h2 { margin-top: 0; }
+        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .5rem .75rem; margin: .75rem 0; }
+        .edit-grid label { display: flex; flex-direction: column; font-size: .85rem; gap: .2rem; }
     </style>
 </head>
 <body>
 <h1>Decathlon Web MVP</h1>
 
-<div class="card">
-    <h2>Add competitor</h2>
-    <div class="row">
-        <label for="name">Name</label>
-        <input id="name" data-testid="competitorNameInput" placeholder="e.g., Anna" />
-        <button id="add" data-testid="addCompetitorBtn">Add competitor</button>
+<div class="top">
+    <div class="card">
+        <h2>Add competitor</h2>
+        <div class="row">
+            <label for="name">Name</label>
+            <input id="name" data-testid="competitorNameInput" placeholder="e.g., Anna" />
+            <button id="add" data-testid="addCompetitorBtn">Add competitor</button>
+        </div>
+        <div id="error" data-testid="errorBanner" aria-live="polite"></div>
     </div>
-    <div id="error" data-testid="errorBanner" aria-live="polite"></div>
-</div>
 
-<div class="card">
-    <h2>Enter result</h2>
-    <div class="row">
-        <label for="name2">Name</label>
-        <input id="name2" placeholder="same as above" />
-        <label for="discipline">Discipline</label>
-        <select id="discipline" data-testid="disciplineSelect">
-            <option value="decathlon">Decathlon</option>
-            <option value="heptathlon">Heptathlon</option>
-        </select>
-        <label for="event">Event</label>
-        <select id="event" data-testid="eventSelect"></select>
-        <label for="raw">Result</label>
-        <input id="raw" data-testid="rawInput" type="number" step="0.01" />
-        <button id="save" data-testid="saveScoreBtn">Save score</button>
+    <div class="card">
+        <h2>Enter result</h2>
+        <div class="row">
+            <label for="name2">Name</label>
+            <input id="name2" list="competitorList" autocomplete="off" placeholder="same as above" />
+            <datalist id="competitorList"></datalist>
+            <label for="discipline">Discipline</label>
+            <select id="discipline" data-testid="disciplineSelect">
+                <option value="decathlon">Decathlon</option>
+                <option value="heptathlon">Heptathlon</option>
+            </select>
+            <label for="event">Event</label>
+            <select id="event" data-testid="eventSelect"></select>
+            <label for="raw">Result</label>
+            <input id="raw" data-testid="rawInput" type="number" step="0.01" />
+            <button id="save" data-testid="saveScoreBtn">Save score</button>
+        </div>
+        <div id="msg" aria-live="polite"></div>
     </div>
-    <div id="msg" aria-live="polite"></div>
 </div>
 
 <div class="card">
     <h2>Standings</h2>
-    <table>
-        <thead>
-        <tr>
-            <th scope="col">Name</th>
-            <th scope="col">100m</th>
-            <th scope="col">Long Jump</th>
-            <th scope="col">Shot Put</th>
-            <th scope="col">400m</th>
-            <th scope="col">Total</th>
-            <th scope="col">Position</th>
-        </tr>
-        </thead>
-        <tbody id="standings" data-testid="standingsTable"></tbody>
-    </table>
-    <button id="export" data-testid="exportCsvBtn">Export CSV</button>
-    <button id="saveState" data-testid="saveStateBtn">Save state</button>
-    <label for="loadState">Load state</label>
-    <input id="loadState" data-testid="loadStateInput" type="file" accept=".json,application/json" />
+    <div class="table-wrap">
+        <table>
+            <thead>
+            <tr id="standingsHead"></tr>
+            </thead>
+            <tbody id="standings" data-testid="standingsTable"></tbody>
+        </table>
+    </div>
+    <div class="row" style="margin-top: .75rem">
+        <button id="export" data-testid="exportCsvBtn">Export CSV</button>
+        <button id="saveState" data-testid="saveStateBtn">Save state</button>
+        <label for="loadState">Load state</label>
+        <input id="loadState" data-testid="loadStateInput" type="file" accept=".json,application/json" />
+    </div>
 </div>
+
+<dialog id="overwriteDialog" data-testid="overwriteDialog" aria-labelledby="overwriteTitle">
+    <form method="dialog">
+        <h2 id="overwriteTitle">Replace existing result?</h2>
+        <p id="overwriteText"></p>
+        <div class="row end">
+            <button value="no" autofocus data-testid="overwriteNoBtn">No, keep it</button>
+            <button value="yes" data-testid="overwriteYesBtn">Yes, replace</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="editDialog" data-testid="editDialog" aria-labelledby="editTitle">
+    <h2 id="editTitle">Edit competitor</h2>
+    <div class="row">
+        <label for="editName">Name</label>
+        <input id="editName" data-testid="editNameInput" />
+    </div>
+    <div id="editResults" class="edit-grid"></div>
+    <div id="editError" class="error" data-testid="editError" aria-live="polite"></div>
+    <div class="row end">
+        <button id="editCancel" type="button" data-testid="editCancelBtn">Cancel</button>
+        <button id="editSave" type="button" data-testid="editSaveBtn">Save changes</button>
+    </div>
+</dialog>
 
 <script src="app.js" type="module"></script>
 </body>
