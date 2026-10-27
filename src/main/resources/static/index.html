@@ -53,6 +53,8 @@
         /* The logo has a fixed box, so the title never shifts when it loads. For a wide logo, raise --logo-width. */
         .brand { display: flex; align-items: center; gap: .9rem; min-width: 0; }
         .logo { flex: none; width: var(--logo-width); height: 48px; object-fit: contain; border-radius: 11px; }
+        /* The logo is a black shape, so it is turned white in dark mode. Remove this rule for a coloured logo. */
+        :root[data-theme="dark"] .logo { filter: invert(1); }
         /* The icon shows the mode a click switches to: a moon in light mode, a sun in dark mode. */
         .theme-toggle .sun, :root[data-theme="dark"] .theme-toggle .moon { display: none; }
         :root[data-theme="dark"] .theme-toggle .sun { display: block; }
