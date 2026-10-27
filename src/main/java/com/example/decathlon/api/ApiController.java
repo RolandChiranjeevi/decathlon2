@@ -2,6 +2,7 @@ package com.example.decathlon.api;
 
 import com.example.decathlon.core.CompetitionService;
 import com.example.decathlon.core.CoreException;
+import com.example.decathlon.core.ScoringService;
 import com.example.decathlon.dto.ScoreReq;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -16,8 +17,29 @@ import java.util.*;
 @RequestMapping("/api")
 public class ApiController {
     private final CompetitionService comp;
+    private final ScoringService scoring;
 
-    public ApiController(CompetitionService comp) { this.comp = comp; }
+    public ApiController(CompetitionService comp, ScoringService scoring) {
+        this.comp = comp;
+        this.scoring = scoring;
+    }
+
+    /** Every event with its unit and accepted range, so a page can show hints without repeating the rules. */
+    @GetMapping("/events")
+    public List<Map<String,Object>> events() {
+        List<Map<String,Object>> list = new ArrayList<>();
+        for (ScoringService.EventDef e : scoring.events()) {
+            Map<String,Object> m = new LinkedHashMap<>();
+            m.put("id", e.id());
+            m.put("label", e.label());
+            m.put("competition", e.competition().name());
+            m.put("unit", e.unit());
+            m.put("min", e.min());
+            m.put("max", e.max());
+            list.add(m);
+        }
+        return list;
+    }
 
     @PostMapping("/competitors")
     public ResponseEntity<Void> add(@RequestBody Map<String,String> body) {

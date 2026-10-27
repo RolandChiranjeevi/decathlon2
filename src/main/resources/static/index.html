@@ -5,113 +5,262 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Decathlon Web MVP</title>
     <style>
-        :root { --line: #e3e3e3; --soft: #f6f7f9; --hep: #fdf3f7; --accent: #1a56db; }
-        body { font-family: system-ui, sans-serif; max-width: 1800px; margin: 1.5rem auto; padding: 0 1.25rem; }
-        .top { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; }
-        .row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; flex-wrap: wrap; }
-        .row.end { justify-content: flex-end; margin-top: 1rem; }
-        .card { border: 1px solid #ddd; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
-        .card h2 { margin-top: 0; }
-        .error, #error { color: #b00020; min-height: 1.2em; }
-        #msg { min-height: 1.2em; }
+        :root {
+            color-scheme: light dark;
+            --bg: #f8fafc; --card: #ffffff; --fg: #0f172a; --muted: #475569;
+            --border: #d5dce8; --soft: #f1f5f9;
+            --primary: #1e40af; --on-primary: #ffffff; --primary-soft: #e8eefc;
+            --danger: #b91c1c; --danger-soft: #fef2f2;
+            --ok: #15803d; --ok-soft: #f0fdf4;
+            --gold: #f5c542; --silver: #cbd5e1; --bronze: #e0a26b; --on-medal: #1f2937;
+            --radius: 10px;
+            --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0b1220; --card: #111a2e; --fg: #e6edf7; --muted: #9fb0c8;
+                --border: #263248; --soft: #16213a;
+                --primary: #7aa2ff; --on-primary: #0b1220; --primary-soft: #1a2a52;
+                --danger: #ff9a9a; --danger-soft: #3a1519;
+                --ok: #6ee7a0; --ok-soft: #10301f;
+            }
+        }
 
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-        th, td { border-bottom: 1px solid #eee; padding: .4rem .45rem; text-align: center; white-space: nowrap; }
-        th { background: var(--soft); font-weight: 600; white-space: normal; vertical-align: bottom; line-height: 1.2; }
-        th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: #fff; }
-        th:first-child { background: var(--soft); }
-        th.hep, td.hep { background: var(--hep); }
-        td.total, td.pos { font-weight: 700; }
-        tbody tr[data-name] { cursor: pointer; }
-        tbody tr[data-name]:hover td { background: #f0f5ff; }
-        button.edit { font-size: .8rem; padding: .15rem .6rem; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5; }
+        main { max-width: 1440px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+        h1 { font-size: 1.6rem; margin: 0 0 .15rem; }
+        h2 { font-size: 1rem; margin: 0 0 .6rem; }
+        .sub { margin: 0 0 1.25rem; color: var(--muted); }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-        dialog { border: 1px solid #bbb; border-radius: 12px; padding: 1.25rem 1.5rem; max-width: 560px; width: calc(100% - 2rem); }
-        dialog::backdrop { background: rgba(0, 0, 0, .4); }
-        dialog h2 { margin-top: 0; }
-        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .5rem .75rem; margin: .75rem 0; }
-        .edit-grid label { display: flex; flex-direction: column; font-size: .85rem; gap: .2rem; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+
+        /* Entry card: add competitor | enter result */
+        .entry-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2.6fr); gap: 1.25rem 2rem; }
+        .entry-grid .block + .block { border-left: 1px solid var(--border); padding-left: 2rem; }
+        .fields { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+        .field.grow { flex: 1 1 11rem; }
+        .field.wide { flex: 1.5 1 12rem; }
+        label { font-size: .8rem; font-weight: 600; color: var(--muted); }
+        .hint { font-size: .75rem; color: var(--muted); min-height: 1.1em; }
+
+        input, select, button { font: inherit; }
+        input, select {
+            height: 36px; padding: 0 .6rem; color: var(--fg); background: var(--card);
+            border: 1px solid var(--border); border-radius: 8px; min-width: 0; width: 100%;
+        }
+        input::placeholder { color: var(--muted); opacity: .8; }
+        input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+        :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+            min-height: 36px; padding: 0 .9rem; cursor: pointer; white-space: nowrap;
+            color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            transition: background-color .15s, border-color .15s;
+        }
+        .btn:hover { background: var(--soft); border-color: var(--muted); }
+        .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+        .btn.primary:hover { filter: brightness(1.08); }
+        .btn.icon { width: 34px; min-height: 34px; padding: 0; }
+        .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        @media (pointer: coarse) { .btn, input, select { min-height: 44px; } }
+
+        .with-unit { position: relative; }
+        .with-unit input { padding-right: 2.6rem; }
+        .with-unit .unit { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
+
+        /* Competitor combobox */
+        .combo { position: relative; }
+        .combo input { padding-right: 2.2rem; }
+        .combo-toggle { position: absolute; right: 2px; top: 2px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px; }
+        .combo-toggle:hover { background: var(--soft); }
+        .combo-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .combo-list {
+            position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 260px; overflow: auto;
+            margin: 0; padding: 4px; list-style: none; background: var(--card);
+            border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+        }
+        .combo-list[hidden] { display: none; }
+        .combo-list li { display: flex; justify-content: space-between; gap: .75rem; padding: .45rem .6rem; border-radius: 6px; cursor: pointer; }
+        .combo-list li small { color: var(--muted); }
+        .combo-list li[aria-selected="true"], .combo-list li:hover { background: var(--primary-soft); }
+        .combo-list li.none { color: var(--muted); cursor: default; }
+        .combo-list li.none:hover { background: transparent; }
+
+        /* Feedback: one place for success and errors */
+        .feedback { margin-top: .9rem; min-height: 1.5em; }
+        .feedback p { margin: 0; }
+        #error { color: var(--danger); font-weight: 600; }
+        #msg { color: var(--ok); font-weight: 600; }
+
+        /* Standings */
+        .bar { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+        .tabs { display: inline-flex; gap: .25rem; padding: 3px; background: var(--soft); border-radius: 10px; }
+        .tabs button { display: inline-flex; align-items: center; gap: .45rem; min-height: 34px; padding: 0 .9rem; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; transition: background-color .15s; }
+        .tabs button[aria-selected="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(15, 23, 42, .2); }
+        .tabs .count { min-width: 1.4rem; padding: 0 .4rem; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: .75rem; text-align: center; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+
+        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        /* No text-transform here: tests read header text with innerText, which would return it uppercased. */
+        th { padding: .55rem .6rem; background: var(--soft); color: var(--muted); font-size: .8rem; font-weight: 700; text-align: center; vertical-align: bottom; line-height: 1.2; }
+        td { padding: .5rem .6rem; border-top: 1px solid var(--border); text-align: center; vertical-align: middle; }
+        th.name, td.name { text-align: left; font-weight: 600; min-width: 9rem; }
+        td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+        td.total { font-weight: 700; font-size: 1rem; }
+        td.num:empty::before { content: "–"; color: var(--muted); opacity: .6; }
+        td[data-raw]:not([data-raw=""])::before { content: attr(data-raw); display: block; white-space: nowrap; font-size: .7rem; font-weight: 400; color: var(--muted); }
+        tbody tr[data-name] { cursor: pointer; transition: background-color .15s; }
+        tbody tr[data-name]:hover { background: var(--primary-soft); }
+        td.act { width: 3rem; }
+
+        .pos { display: inline-flex; align-items: center; justify-content: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; font-weight: 700; font-size: .85rem; }
+        .pos-1 { background: var(--gold); color: var(--on-medal); }
+        .pos-2 { background: var(--silver); color: var(--on-medal); }
+        .pos-3 { background: var(--bronze); color: var(--on-medal); }
+        .pos-n { color: var(--muted); font-weight: 600; }
+
+        .empty { padding: 2rem 1rem; text-align: center; color: var(--muted); }
+        .note { margin: .75rem 0 0; font-size: .8rem; color: var(--muted); }
+
+        /* Dialogs */
+        dialog { color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; max-width: 560px; width: calc(100% - 2rem); }
+        dialog::backdrop { background: rgba(2, 6, 23, .55); }
+        dialog h2 { font-size: 1.15rem; }
+        .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; }
+        .edit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .75rem; margin: .9rem 0 .25rem; }
+        #editError { color: var(--danger); font-weight: 600; min-height: 1.5em; }
+
+        @media (max-width: 960px) {
+            .entry-grid { grid-template-columns: 1fr; }
+            .entry-grid .block + .block { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 1rem; }
+        }
+        @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
     </style>
 </head>
 <body>
-<h1>Decathlon Web MVP</h1>
+<main>
+    <h1>Decathlon Web MVP</h1>
+    <p class="sub">Add competitors, enter their results and follow the standings.</p>
 
-<div class="top">
-    <div class="card">
-        <h2>Add competitor</h2>
-        <div class="row">
-            <label for="name">Name</label>
-            <input id="name" data-testid="competitorNameInput" placeholder="e.g., Anna" />
-            <button id="add" data-testid="addCompetitorBtn">Add competitor</button>
+    <section class="card" aria-label="Competitors and results">
+        <div class="entry-grid">
+            <div class="block">
+                <h2>Add competitor</h2>
+                <div class="fields">
+                    <div class="field grow">
+                        <label for="name">Name</label>
+                        <input id="name" data-testid="competitorNameInput" placeholder="e.g., Anna" autocomplete="off" />
+                    </div>
+                    <button id="add" class="btn primary" type="button" data-testid="addCompetitorBtn">Add competitor</button>
+                </div>
+            </div>
+
+            <div class="block">
+                <h2>Enter result</h2>
+                <div class="fields">
+                    <div class="field wide">
+                        <label for="name2">Competitor</label>
+                        <div class="combo">
+                            <input id="name2" role="combobox" aria-expanded="false" aria-controls="comboList"
+                                   aria-autocomplete="list" autocomplete="off" placeholder="Same as above" />
+                            <button id="comboToggle" class="combo-toggle" type="button" tabindex="-1" aria-label="Show all competitors">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                            </button>
+                            <ul id="comboList" class="combo-list" role="listbox" aria-label="Competitors" hidden></ul>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="discipline">Discipline</label>
+                        <select id="discipline" data-testid="disciplineSelect">
+                            <option value="decathlon">Decathlon</option>
+                            <option value="heptathlon">Heptathlon</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="event">Event</label>
+                        <select id="event" data-testid="eventSelect"></select>
+                    </div>
+                    <div class="field" style="width: 9rem">
+                        <label for="raw">Result</label>
+                        <div class="with-unit">
+                            <input id="raw" data-testid="rawInput" type="number" step="0.01" />
+                            <span id="unit" class="unit" aria-hidden="true"></span>
+                        </div>
+                    </div>
+                    <button id="save" class="btn primary" type="button" data-testid="saveScoreBtn">Save score</button>
+                </div>
+                <div id="rangeHint" class="hint"></div>
+            </div>
         </div>
-        <div id="error" data-testid="errorBanner" aria-live="polite"></div>
-    </div>
 
-    <div class="card">
-        <h2>Enter result</h2>
-        <div class="row">
-            <label for="name2">Name</label>
-            <input id="name2" list="competitorList" autocomplete="off" placeholder="same as above" />
-            <datalist id="competitorList"></datalist>
-            <label for="discipline">Discipline</label>
-            <select id="discipline" data-testid="disciplineSelect">
-                <option value="decathlon">Decathlon</option>
-                <option value="heptathlon">Heptathlon</option>
-            </select>
-            <label for="event">Event</label>
-            <select id="event" data-testid="eventSelect"></select>
-            <label for="raw">Result</label>
-            <input id="raw" data-testid="rawInput" type="number" step="0.01" />
-            <button id="save" data-testid="saveScoreBtn">Save score</button>
+        <div class="feedback">
+            <p id="error" data-testid="errorBanner" aria-live="polite"></p>
+            <p id="msg" role="status"></p>
         </div>
-        <div id="msg" aria-live="polite"></div>
-    </div>
-</div>
+    </section>
 
-<div class="card">
-    <h2>Standings</h2>
-    <div class="table-wrap">
-        <table>
-            <thead>
-            <tr id="standingsHead"></tr>
-            </thead>
-            <tbody id="standings" data-testid="standingsTable"></tbody>
-        </table>
-    </div>
-    <div class="row" style="margin-top: .75rem">
-        <button id="export" data-testid="exportCsvBtn">Export CSV</button>
-        <button id="saveState" data-testid="saveStateBtn">Save state</button>
-        <label for="loadState">Load state</label>
-        <input id="loadState" data-testid="loadStateInput" type="file" accept=".json,application/json" />
-    </div>
-</div>
+    <section class="card" aria-label="Standings">
+        <div class="bar">
+            <div class="tabs" role="tablist" aria-label="Competition">
+                <button id="tabDecathlon" type="button" role="tab" data-tab="DECATHLON" data-testid="tabDecathlon" aria-selected="true" aria-controls="tablePanel">
+                    Decathlon <span class="count" id="countDecathlon">0</span>
+                </button>
+                <button id="tabHeptathlon" type="button" role="tab" data-tab="HEPTATHLON" data-testid="tabHeptathlon" aria-selected="false" aria-controls="tablePanel" tabindex="-1">
+                    Heptathlon <span class="count" id="countHeptathlon">0</span>
+                </button>
+            </div>
+            <div class="toolbar">
+                <button id="export" class="btn" type="button" data-testid="exportCsvBtn">Export CSV</button>
+                <button id="saveState" class="btn" type="button" data-testid="saveStateBtn">Save state</button>
+                <button id="loadStateBtn" class="btn" type="button">Load state…</button>
+                <input id="loadState" data-testid="loadStateInput" type="file" accept=".json,application/json" hidden />
+            </div>
+        </div>
+
+        <div id="tablePanel" class="table-wrap" role="tabpanel" aria-labelledby="tabDecathlon">
+            <table>
+                <thead>
+                <tr id="standingsHead"></tr>
+                </thead>
+                <tbody id="standings" data-testid="standingsTable"></tbody>
+            </table>
+            <p id="emptyState" class="empty" hidden>No competitors here yet. Add the first one above.</p>
+        </div>
+        <p class="note">Click a row to load that competitor into "Enter result". Positions are counted within each competition and ties share a position.</p>
+    </section>
+</main>
 
 <dialog id="overwriteDialog" data-testid="overwriteDialog" aria-labelledby="overwriteTitle">
     <form method="dialog">
         <h2 id="overwriteTitle">Replace existing result?</h2>
         <p id="overwriteText"></p>
-        <div class="row end">
-            <button value="no" autofocus data-testid="overwriteNoBtn">No, keep it</button>
-            <button value="yes" data-testid="overwriteYesBtn">Yes, replace</button>
+        <div class="dialog-actions">
+            <button class="btn" value="no" autofocus data-testid="overwriteNoBtn">No, keep it</button>
+            <button class="btn primary" value="yes" data-testid="overwriteYesBtn">Yes, replace</button>
         </div>
     </form>
 </dialog>
 
 <dialog id="editDialog" data-testid="editDialog" aria-labelledby="editTitle">
     <h2 id="editTitle">Edit competitor</h2>
-    <div class="row">
+    <div class="field">
         <label for="editName">Name</label>
-        <input id="editName" data-testid="editNameInput" />
+        <input id="editName" data-testid="editNameInput" autocomplete="off" />
     </div>
     <div id="editResults" class="edit-grid"></div>
-    <div id="editError" class="error" data-testid="editError" aria-live="polite"></div>
-    <div class="row end">
-        <button id="editCancel" type="button" data-testid="editCancelBtn">Cancel</button>
-        <button id="editSave" type="button" data-testid="editSaveBtn">Save changes</button>
+    <div id="editError" data-testid="editError" aria-live="polite"></div>
+    <div class="dialog-actions">
+        <button id="editCancel" class="btn" type="button" data-testid="editCancelBtn">Cancel</button>
+        <button id="editSave" class="btn primary" type="button" data-testid="editSaveBtn">Save changes</button>
     </div>
 </dialog>
 
-<script src="app.js?v=4" type="module"></script>
+<script src="app.js?v=5" type="module"></script>
 </body>
 </html>

@@ -124,23 +124,27 @@ public class CompetitionService {
 
     /**
      * Standings, highest total first, ties in the order the competitors were added.
+     * Positions are counted within each competition, so decathletes and heptathletes are ranked apart.
      * Tied competitors share a position and the next one skips (1, 2, 2, 4).
+     * Competitors with no result yet have no competition and are ranked among themselves.
      * Each row: name, competition, scores (event to points), raw (event to raw result), total, position.
      */
     public synchronized List<Map<String, Object>> standings() {
         List<Competitor> ranked = new ArrayList<>(competitors.values());
         ranked.sort(Comparator.comparingInt(Competitor::total).reversed());
 
+        // Per competition: {competitors seen so far, previous total, current position}.
+        Map<Competition, int[]> groups = new HashMap<>();
         List<Map<String, Object>> rows = new ArrayList<>();
-        int position = 0;
-        int previousTotal = 0;
-        for (int i = 0; i < ranked.size(); i++) {
-            Competitor c = ranked.get(i);
+        for (Competitor c : ranked) {
             int total = c.total();
-            if (i == 0 || total != previousTotal) {
-                position = i + 1;
+            int[] g = groups.computeIfAbsent(c.competition, k -> new int[3]);
+            g[0]++;
+            if (g[0] == 1 || total != g[1]) {
+                g[2] = g[0];
             }
-            previousTotal = total;
+            g[1] = total;
+            int position = g[2];
 
             Map<String, Integer> points = new LinkedHashMap<>();
             Map<String, Double> raws = new LinkedHashMap<>();
@@ -184,9 +188,9 @@ public class CompetitionService {
             Map<String, Integer> points = (Map<String, Integer>) row.get("scores");
             Map<String, Double> raws = (Map<String, Double>) row.get("raw");
             List<String> cells = new ArrayList<>();
-            cells.add(String.valueOf(row.get("position")));
-            cells.add((String) row.get("name"));
             Object competition = row.get("competition");
+            cells.add(competition == null ? "" : String.valueOf(row.get("position")));
+            cells.add((String) row.get("name"));
             cells.add(competition == null ? "" : label(Competition.valueOf((String) competition)));
             for (EventDef e : used) {
                 Double raw = raws.get(e.id());
