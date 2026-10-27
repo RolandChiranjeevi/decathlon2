@@ -36,12 +36,13 @@ const ALL_EVENTS = [
 const eventById = (id) => ALL_EVENTS.find(e => e.id === id);
 const columnTitle = (e) => (e.hep ? 'Hep ' : '') + e.label.replace(/ \(.*\)$/, '');
 
+// Name, Edit, Position and Total come first so they stay visible; the 17 event columns follow.
 el('standingsHead').innerHTML = [
   '<th scope="col">Name</th>',
-  ...ALL_EVENTS.map(e => `<th scope="col"${e.hep ? ' class="hep"' : ''}>${columnTitle(e)}</th>`),
-  '<th scope="col">Total</th>',
+  '<th scope="col">Actions</th>',
   '<th scope="col">Position</th>',
-  '<th scope="col">Actions</th>'
+  '<th scope="col">Total</th>',
+  ...ALL_EVENTS.map(e => `<th scope="col"${e.hep ? ' class="hep"' : ''}>${columnTitle(e)}</th>`)
 ].join('');
 
 function populateEvents() {
@@ -182,10 +183,10 @@ async function renderStandings() {
     const rows = (sortBroken ? data : data.sort((a,b)=> (b.total||0)-(a.total||0)))
       .map(r => `<tr data-name="${escapeHtml(r.name)}" title="${escapeHtml(describeRow(r))}">
         <td>${escapeHtml(r.name)}</td>
-        ${ALL_EVENTS.map(e => `<td${e.hep ? ' class="hep"' : ''}>${r.scores?.[e.id] ?? ''}</td>`).join('')}
-        <td class="total">${r.total ?? 0}</td>
-        <td class="pos">${r.position ?? ''}</td>
         <td><button type="button" class="edit" data-testid="editBtn" aria-label="Edit ${escapeHtml(r.name)}">Edit</button></td>
+        <td class="pos">${r.position ?? ''}</td>
+        <td class="total">${r.total ?? 0}</td>
+        ${ALL_EVENTS.map(e => `<td${e.hep ? ' class="hep"' : ''}>${r.scores?.[e.id] ?? ''}</td>`).join('')}
       </tr>`).join('');
 
     el('standings').innerHTML = rows;
