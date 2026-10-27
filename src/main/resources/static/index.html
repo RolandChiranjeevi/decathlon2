@@ -3,7 +3,9 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Decathlon Web MVP</title>
+    <title>Decathlon &amp; Heptathlon</title>
+    <!-- The tab icon uses the same file as the header logo. For a PNG, change type to image/png. -->
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
     <script>
         // Set the theme before the page is drawn, so there is no flash: the saved choice, else the system's.
         (function () {
@@ -24,6 +26,7 @@
             --gold: #f5c542; --silver: #cbd5e1; --bronze: #e0a26b; --on-medal: #1f2937;
             --hep-soft: #fce7f3; --hep-fg: #9d174d;
             --radius: 10px;
+            --logo-width: 48px;
             --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
@@ -43,10 +46,13 @@
         html { scrollbar-gutter: stable; }
         body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5; }
         main { max-width: 1440px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
-        h1 { font-size: 1.6rem; margin: 0 0 .15rem; }
+        h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 .15rem; }
         h2 { font-size: 1rem; margin: 0 0 .6rem; }
-        .sub { margin: 0 0 1.25rem; color: var(--muted); }
-        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+        .sub { margin: 0; color: var(--muted); }
+        .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
+        /* The logo has a fixed box, so the title never shifts when it loads. For a wide logo, raise --logo-width. */
+        .brand { display: flex; align-items: center; gap: .9rem; min-width: 0; }
+        .logo { flex: none; width: var(--logo-width); height: 48px; object-fit: contain; border-radius: 11px; }
         /* The icon shows the mode a click switches to: a moon in light mode, a sun in dark mode. */
         .theme-toggle .sun, :root[data-theme="dark"] .theme-toggle .moon { display: none; }
         :root[data-theme="dark"] .theme-toggle .sun { display: block; }
@@ -202,9 +208,13 @@
 <body>
 <main>
     <div class="page-head">
-        <div>
-            <h1>Decathlon Web MVP</h1>
-            <p class="sub">Add competitors, enter their results and follow the standings.</p>
+        <div class="brand">
+            <!-- Decorative: the title next to it already names the app. Give it alt text if it carries other words. -->
+            <img class="logo" src="logo.svg" alt="" />
+            <div>
+                <h1>Decathlon &amp; Heptathlon</h1>
+                <p class="sub">Enter results and follow the standings</p>
+            </div>
         </div>
         <button id="themeToggle" class="btn icon theme-toggle" type="button" data-testid="themeToggle" aria-label="Switch to dark mode" title="Switch to dark mode">
             <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
