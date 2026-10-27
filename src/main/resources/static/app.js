@@ -10,7 +10,8 @@ function setError(text, field) {
   err.textContent = text;
   msg.textContent = '';
   clearInvalid();
-  if (field) field.setAttribute('aria-invalid', 'true');
+  // A dropdown's visible box is its button, not the hidden <select>.
+  if (field) (field._button ?? field).setAttribute('aria-invalid', 'true');
 }
 function setMsg(text) {
   msg.textContent = text;
@@ -122,6 +123,7 @@ function syncFromName() {
   const want = row.competition.toLowerCase();
   if (el('discipline').value !== want) {
     el('discipline').value = want;
+    syncDropdown(el('discipline'));
     populateEvents(el('event').value);
   }
   setTab(row.competition);
@@ -135,14 +137,14 @@ function renderCombo() {
   const current = combo.input.value.trim();
   combo.active = Math.max(0, combo.items.findIndex(r => r.name === current));
   combo.list.innerHTML = combo.items.length
-    ? combo.items.map((r, i) => `<li role="option" id="opt-${i}" data-name="${escapeHtml(r.name)}" aria-selected="${i === combo.active}">
+    ? combo.items.map((r, i) => `<li role="option" id="opt-${i}" data-name="${escapeHtml(r.name)}" class="${i === combo.active ? 'active' : ''}" aria-selected="${r.name === current}">
         <span>${escapeHtml(r.name)}</span><small>${r.competition ? competitionLabel(r.competition) : ''}</small></li>`).join('')
     : '<li class="none" role="option" aria-disabled="true">No competitors yet</li>';
   markActive();
 }
 
 function markActive() {
-  combo.list.querySelectorAll('li[data-name]').forEach((li, i) => li.setAttribute('aria-selected', String(i === combo.active)));
+  combo.list.querySelectorAll('li[data-name]').forEach((li, i) => li.classList.toggle('active', i === combo.active));
   const li = combo.list.querySelector(`#opt-${combo.active}`);
   if (li) {
     combo.input.setAttribute('aria-activedescendant', li.id);
@@ -335,6 +337,8 @@ el('loadState').addEventListener('change', async (ev) => {
 
 // ---- Standings ----
 const PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+// Column widths in rem. They are the same for every competition (see renderTable).
+const COLUMN_REM = { pos: 3.5, name: 11, total: 5, act: 3.5, event: 5 };
 
 async function renderStandings(focusName) {
   try {
@@ -370,12 +374,18 @@ const visibleRows = (competition) => lastStandings.filter(r => !r.competition ||
 function renderTable() {
   const events = ALL_EVENTS.filter(e => e.hep === (tab === 'HEPTATHLON'));
 
+  // The first four columns and every event column have the same width in every competition, so
+  // switching moves nothing; a 7-event table just ends sooner.
+  const widths = [COLUMN_REM.pos, COLUMN_REM.name, COLUMN_REM.total, COLUMN_REM.act, ...events.map(() => COLUMN_REM.event)];
+  el('standingsCols').innerHTML = widths.map(w => `<col style="width: ${w}rem">`).join('');
+  el('standingsTableEl').style.width = `${widths.reduce((sum, w) => sum + w, 0)}rem`;
+
   el('standingsHead').innerHTML = [
     '<th scope="col" title="Position">Pos</th>',
     '<th scope="col" class="name">Name</th>',
     '<th scope="col">Total</th>',
-    ...events.map(e => `<th scope="col">${titleOf(e)}</th>`),
-    '<th scope="col"><span class="sr-only">Actions</span></th>'
+    '<th scope="col"><span class="sr-only">Actions</span></th>',
+    ...events.map(e => `<th scope="col">${titleOf(e)}</th>`)
   ].join('');
 
   const rows = visibleRows(tab);
@@ -393,10 +403,10 @@ function renderTable() {
     }).join('');
     return `<tr data-name="${escapeHtml(r.name)}">
       <td>${pos}</td>
-      <td class="name">${escapeHtml(r.name)}</td>
+      <td class="name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td>
       <td class="num total">${r.total ?? 0}</td>
-      ${cells}
       <td class="act"><button type="button" class="btn icon edit" data-testid="editBtn" aria-label="Edit ${escapeHtml(r.name)}" title="Edit">${PENCIL}</button></td>
+      ${cells}
     </tr>`;
   }).join('');
   el('emptyState').hidden = rows.length > 0;
@@ -499,6 +509,7 @@ function renderCompetitionBar() {
   select.innerHTML = competitions.map(c =>
     `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)} · ${typeLabel(c.type)} (${c.competitors})</option>`).join('');
   select.value = currentId;
+  syncDropdown(select);
   const c = currentCompetition();
   el('competitionType').textContent = typeLabel(c?.type);
   el('competitionType').dataset.type = c?.type || 'MIXED';
@@ -517,6 +528,7 @@ function applyCompetition() {
     tab = typed;
     tabChosen = true;
     el('discipline').value = typed.toLowerCase();
+    syncDropdown(el('discipline'));
     populateEvents();
   }
   renderCompetitionBar();
@@ -593,6 +605,139 @@ el('compSave').addEventListener('click', async () => {
 function escapeHtml(s){
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
+
+// ---- One dropdown design for every <select> ----
+const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+
+const syncDropdown = (select) => select._refresh?.();
+
+// Replaces what the user sees of a <select> with a button and a list that look like the competitor
+// dropdown. The <select> stays in the page, hidden, as the source of truth: its value, its change
+// event and its test id keep working, and any change made to it (by this script or by a test) is
+// mirrored on the button.
+function enhanceSelect(select) {
+  const label = document.querySelector(`label[for="${select.id}"]`);
+  const wrap = document.createElement('div');
+  wrap.className = 'dd';
+  select.before(wrap);
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'dd-btn';
+  button.setAttribute('role', 'combobox');
+  button.setAttribute('aria-haspopup', 'listbox');
+  button.setAttribute('aria-expanded', 'false');
+  button.innerHTML = `<span class="dd-value"></span>${CHEVRON}`;
+  if (label) {
+    label.id = label.id || `${select.id}-label`;
+    button.setAttribute('aria-labelledby', label.id);
+    label.addEventListener('click', () => button.focus());
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'dd-list';
+  list.id = `${select.id}-list`;
+  list.setAttribute('role', 'listbox');
+  list.hidden = true;
+  button.setAttribute('aria-controls', list.id);
+
+  wrap.append(button, list, select);
+  select.classList.add('sr-only');
+  select.tabIndex = -1;
+  select.setAttribute('aria-hidden', 'true');
+
+  let active = -1;
+  let typed = '';
+  let typedTimer = null;
+  const options = () => [...select.options];
+
+  function markActive() {
+    [...list.children].forEach((li, i) => li.classList.toggle('active', i === active));
+    const li = list.children[active];
+    if (li) {
+      button.setAttribute('aria-activedescendant', li.id);
+      li.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  function renderList() {
+    list.innerHTML = options().map((o, i) =>
+      `<li role="option" id="${list.id}-${i}" aria-selected="${o.selected}">${escapeHtml(o.textContent)}</li>`).join('');
+    markActive();
+  }
+  function close() {
+    list.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    button.removeAttribute('aria-activedescendant');
+  }
+  function open() {
+    if (select.disabled) return;
+    active = Math.max(0, select.selectedIndex);
+    list.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    renderList();
+  }
+  function refresh() {
+    const selected = select.selectedOptions[0];
+    button.querySelector('.dd-value').textContent = selected ? selected.textContent : '';
+    button.disabled = select.disabled;
+    button.title = select.title;
+    if (select.disabled) close();
+    else if (!list.hidden) renderList();
+  }
+  function choose(index) {
+    close();
+    if (index >= 0 && index !== select.selectedIndex) {
+      select.selectedIndex = index;
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    refresh();
+  }
+
+  button.addEventListener('click', () => (list.hidden ? open() : close()));
+  button.addEventListener('blur', close);
+  button.addEventListener('keydown', (ev) => {
+    const isOpen = !list.hidden;
+    const last = options().length - 1;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!isOpen) open();
+      else { active = Math.min(last, Math.max(0, active + (ev.key === 'ArrowDown' ? 1 : -1))); markActive(); }
+    } else if (ev.key === 'Home' || ev.key === 'End') {
+      if (isOpen) { ev.preventDefault(); active = ev.key === 'Home' ? 0 : last; markActive(); }
+    } else if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      if (isOpen) choose(active); else open();
+    } else if (ev.key === 'Escape' && isOpen) {
+      ev.preventDefault();
+      close();
+    } else if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      // Type-ahead: "H" jumps to the first option starting with H.
+      typed += ev.key.toLowerCase();
+      clearTimeout(typedTimer);
+      typedTimer = setTimeout(() => { typed = ''; }, 600);
+      const hit = options().findIndex(o => o.textContent.toLowerCase().startsWith(typed));
+      if (hit >= 0) {
+        if (isOpen) { active = hit; markActive(); } else choose(hit);
+      }
+    }
+  });
+  list.addEventListener('mousedown', (ev) => {
+    ev.preventDefault();   // keep focus on the button so the list isn't closed by a blur
+    const li = ev.target.closest('li');
+    if (li) choose([...list.children].indexOf(li));
+  });
+
+  select.addEventListener('change', refresh);
+  new MutationObserver(refresh).observe(select, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'title']
+  });
+  select._refresh = refresh;
+  select._button = button;
+  refresh();
+}
+
+for (const id of ['competition', 'discipline', 'event']) enhanceSelect(el(id));
 
 // Headers appear at once; the data follows when the competition list and standings have loaded.
 renderTable();

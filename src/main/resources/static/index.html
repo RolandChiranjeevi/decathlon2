@@ -31,6 +31,8 @@
 
         * { box-sizing: border-box; }
         [hidden] { display: none !important; }
+        /* Keep the page width the same whether or not a scrollbar is showing. */
+        html { scrollbar-gutter: stable; }
         body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5; }
         main { max-width: 1440px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
         h1 { font-size: 1.6rem; margin: 0 0 .15rem; }
@@ -40,13 +42,13 @@
 
         .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
 
-        /* Competition switcher */
+        /* Competition switcher. Sizes are fixed so nothing moves when the selection changes. */
         .competition-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; }
         .competition-bar .field { flex: 1 1 18rem; max-width: 30rem; }
-        .competition-bar select { font-weight: 600; }
+        .competition-bar .dd-btn { font-weight: 600; }
         .competition-bar .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
-        .competition-bar .hint { flex-basis: 100%; margin: 0; }
-        .badge { display: inline-flex; align-items: center; height: 28px; padding: 0 .75rem; border-radius: 999px; font-size: .8rem; font-weight: 700; background: var(--soft); color: var(--muted); }
+        .competition-bar .hint { flex-basis: 100%; margin: 0; min-height: 1.5em; }
+        .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 7rem; height: 36px; padding: 0 .75rem; border-radius: 999px; font-size: .8rem; font-weight: 700; background: var(--soft); color: var(--muted); }
         .badge[data-type="DECATHLON"] { background: var(--primary-soft); color: var(--primary); }
         .badge[data-type="HEPTATHLON"] { background: var(--hep-soft); color: var(--hep-fg); }
         .type-fields { margin: .9rem 0 0; padding: 0; border: 0; display: flex; gap: 1.25rem; flex-wrap: wrap; }
@@ -57,22 +59,25 @@
         #compError { color: var(--danger); font-weight: 600; min-height: 1.5em; margin-top: .5rem; }
 
         /* Entry card: add competitor | enter result */
-        .entry-grid { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2.6fr); gap: 1.25rem 2rem; }
-        .entry-grid .block + .block { border-left: 1px solid var(--border); padding-left: 2rem; }
+        .entry-grid { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 3fr); gap: 1.25rem 2rem; }
+        .entry-grid .block + .block { border-left: 1px solid var(--border); padding-left: 1.5rem; }
         .fields { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; }
         .field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
         .field.grow { flex: 1 1 11rem; }
-        .field.wide { flex: 1.5 1 12rem; }
+        .field.wide { flex: 1 1 10rem; }
+        .field.w-disc { flex: 0 0 9rem; }
+        .field.w-event { flex: 0 0 12.5rem; }
+        .field.w-result { flex: 0 0 7.5rem; }
         label { font-size: .8rem; font-weight: 600; color: var(--muted); }
         .hint { font-size: .75rem; color: var(--muted); min-height: 1.1em; }
 
-        input, select, button { font: inherit; }
-        input, select {
+        input, button { font: inherit; }
+        input {
             height: 36px; padding: 0 .6rem; color: var(--fg); background: var(--card);
             border: 1px solid var(--border); border-radius: 8px; min-width: 0; width: 100%;
         }
         input::placeholder { color: var(--muted); opacity: .8; }
-        input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+        input[aria-invalid="true"], .dd-btn[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
         :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
         .btn {
@@ -86,27 +91,40 @@
         .btn.primary:hover { filter: brightness(1.08); }
         .btn.icon { width: 34px; min-height: 34px; padding: 0; }
         .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        @media (pointer: coarse) { .btn, input, select { min-height: 44px; } }
+        @media (pointer: coarse) { .btn, input, .dd-btn { min-height: 44px; } }
 
         .with-unit { position: relative; }
         .with-unit input { padding-right: 2.6rem; }
         .with-unit .unit { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
 
-        /* Competitor combobox */
-        .combo { position: relative; }
+        /* Every dropdown (competition, discipline, event, competitor) shares this look:
+           same box, same chevron, same list. */
+        .dd, .combo { position: relative; width: 100%; }
+        .dd-btn {
+            display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+            width: 100%; height: 36px; padding: 0 .6rem; color: var(--fg); background: var(--card);
+            border: 1px solid var(--border); border-radius: 8px; text-align: left; cursor: pointer;
+            transition: border-color .15s;
+        }
+        .dd-btn:hover, .combo input:hover { border-color: var(--muted); }
+        .dd-btn[aria-expanded="true"], .combo input[aria-expanded="true"] { border-color: var(--primary); }
+        .dd-btn:disabled { background: var(--soft); color: var(--muted); cursor: not-allowed; }
+        .dd-btn:disabled:hover { border-color: var(--border); }
+        .dd-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .dd-btn svg, .combo-toggle svg { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .combo input { padding-right: 2.2rem; }
-        .combo-toggle { position: absolute; right: 2px; top: 2px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px; }
+        .combo-toggle { position: absolute; right: 2px; top: 2px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 0; background: transparent; cursor: pointer; border-radius: 6px; }
         .combo-toggle:hover { background: var(--soft); }
-        .combo-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-        .combo-list {
+        .dd-list, .combo-list {
             position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); max-height: 260px; overflow: auto;
             margin: 0; padding: 4px; list-style: none; background: var(--card);
             border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
         }
-        .combo-list[hidden] { display: none; }
-        .combo-list li { display: flex; justify-content: space-between; gap: .75rem; padding: .45rem .6rem; border-radius: 6px; cursor: pointer; }
-        .combo-list li small { color: var(--muted); }
-        .combo-list li[aria-selected="true"], .combo-list li:hover { background: var(--primary-soft); }
+        .dd-list li, .combo-list li { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .45rem .6rem; border-radius: 6px; cursor: pointer; }
+        .dd-list li small, .combo-list li small { color: var(--muted); }
+        .dd-list li:hover, .dd-list li.active, .combo-list li:hover, .combo-list li.active { background: var(--primary-soft); }
+        .dd-list li[aria-selected="true"], .combo-list li[aria-selected="true"] { font-weight: 600; }
+        .dd-list li[aria-selected="true"]::after, .combo-list li[aria-selected="true"]::after { content: "✓"; color: var(--primary); }
         .combo-list li.none { color: var(--muted); cursor: default; }
         .combo-list li.none:hover { background: transparent; }
 
@@ -116,27 +134,28 @@
         #error { color: var(--danger); font-weight: 600; }
         #msg { color: var(--ok); font-weight: 600; }
 
-        /* Standings */
-        .bar { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+        /* Standings: fixed column widths and row heights, so switching competition or tab moves nothing. */
+        .bar { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; justify-content: space-between; min-height: 42px; margin-bottom: .75rem; }
         .tabs { display: inline-flex; gap: .25rem; padding: 3px; background: var(--soft); border-radius: 10px; }
         .tabs button { display: inline-flex; align-items: center; gap: .45rem; min-height: 34px; padding: 0 .9rem; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; transition: background-color .15s; }
         .tabs button[aria-selected="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(15, 23, 42, .2); }
         .tabs .count { min-width: 1.4rem; padding: 0 .4rem; border-radius: 999px; background: var(--primary-soft); color: var(--primary); font-size: .75rem; text-align: center; }
-        .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-left: auto; }
 
-        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+        /* The grey header band runs the full width, even when the table (7 events) is narrower than the card. */
+        .table-wrap { overflow-x: auto; min-height: 21rem; border: 1px solid var(--border); border-radius: 8px; background: linear-gradient(to bottom, var(--soft) 3rem, transparent 3rem); }
+        table { table-layout: fixed; border-collapse: collapse; font-size: .9rem; }
         /* No text-transform here: tests read header text with innerText, which would return it uppercased. */
-        th { padding: .55rem .6rem; background: var(--soft); color: var(--muted); font-size: .8rem; font-weight: 700; text-align: center; vertical-align: bottom; line-height: 1.2; }
-        td { padding: .5rem .6rem; border-top: 1px solid var(--border); text-align: center; vertical-align: middle; }
-        th.name, td.name { text-align: left; font-weight: 600; min-width: 9rem; }
+        th { height: 3rem; padding: 0 .35rem; color: var(--muted); font-size: .8rem; font-weight: 700; text-align: center; vertical-align: middle; line-height: 1.2; }
+        td { height: 3.5rem; padding: 0 .35rem; border-top: 1px solid var(--border); text-align: center; vertical-align: middle; }
+        th.name, td.name { text-align: left; padding-left: .6rem; }
+        td.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
         td.total { font-weight: 700; font-size: 1rem; }
         td.num:empty::before { content: "–"; color: var(--muted); opacity: .6; }
         td[data-raw]:not([data-raw=""])::before { content: attr(data-raw); display: block; white-space: nowrap; font-size: .7rem; font-weight: 400; color: var(--muted); }
         tbody tr[data-name] { cursor: pointer; transition: background-color .15s; }
         tbody tr[data-name]:hover { background: var(--primary-soft); }
-        td.act { width: 3rem; }
 
         .pos { display: inline-flex; align-items: center; justify-content: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; font-weight: 700; font-size: .85rem; }
         .pos-1 { background: var(--gold); color: var(--on-medal); }
@@ -207,18 +226,18 @@
                             <ul id="comboList" class="combo-list" role="listbox" aria-label="Competitors" hidden></ul>
                         </div>
                     </div>
-                    <div class="field">
+                    <div class="field w-disc">
                         <label for="discipline">Discipline</label>
                         <select id="discipline" data-testid="disciplineSelect">
                             <option value="decathlon">Decathlon</option>
                             <option value="heptathlon">Heptathlon</option>
                         </select>
                     </div>
-                    <div class="field">
+                    <div class="field w-event">
                         <label for="event">Event</label>
                         <select id="event" data-testid="eventSelect"></select>
                     </div>
-                    <div class="field" style="width: 9rem">
+                    <div class="field w-result">
                         <label for="raw">Result</label>
                         <div class="with-unit">
                             <input id="raw" data-testid="rawInput" type="number" step="0.01" />
@@ -256,7 +275,8 @@
         </div>
 
         <div id="tablePanel" class="table-wrap" role="tabpanel" aria-labelledby="tabDecathlon">
-            <table>
+            <table id="standingsTableEl">
+                <colgroup id="standingsCols"></colgroup>
                 <thead>
                 <tr id="standingsHead"></tr>
                 </thead>
@@ -311,6 +331,6 @@
     </div>
 </dialog>
 
-<script src="app.js?v=6" type="module"></script>
+<script src="app.js?v=7" type="module"></script>
 </body>
 </html>
