@@ -18,7 +18,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
           cache: maven
 
       - name: Set up Node
@@ -58,9 +58,29 @@ jobs:
           cat app.log
           exit 1      
 
+      - name: Install Playwright browser for the Java tests
+        run: >
+          mvn -B exec:java -e
+          -Dexec.mainClass=com.microsoft.playwright.CLI
+          -Dexec.args="install --with-deps chromium"
+
+      - name: Run Java tests
+        env:
+          PLAYWRIGHT_HEADLESS: 'true'
+        run: mvn -B test
+
       - name: Run Playwright tests
+        if: ${{ !cancelled() }}
         working-directory: e2e
         run: npx playwright test
+
+      - name: Upload Java test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
 
       - name: Upload Playwright report
         if: always()

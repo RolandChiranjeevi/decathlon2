@@ -66,8 +66,12 @@ el('save').addEventListener('click', async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    const json = await res.json();
-    setMsg(`Saved: ${json.points} pts`);
+    if (!res.ok) {
+      setError((await res.text()) || 'Score failed');
+    } else {
+      const json = await res.json();
+      setMsg(`Saved: ${json.points} pts`);
+    }
     await renderStandings();
   } catch (e) {
     setError('Score failed');
@@ -75,19 +79,56 @@ el('save').addEventListener('click', async () => {
 });
 
 let sortBroken = false;
+let lastStandings = [];
+
+// Downloads a server file under the name the server chose (timestamped), or the fallback.
+async function download(url, type, fallbackName) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(await res.text());
+  const text = await res.text();
+  const named = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = named ? named[1] : fallbackName;
+  a.click();
+}
 
 el('export').addEventListener('click', async () => {
   try {
-    const res = await fetch('/api/export.csv');
-    const text = await res.text();
-    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'results.csv';
-    a.click();
+    await download('/api/export.csv', 'text/csv;charset=utf-8', 'results.csv');
     sortBroken = true;
   } catch (e) {
     setError('Export failed');
+  }
+});
+
+el('saveState').addEventListener('click', async () => {
+  try {
+    await download('/api/state', 'application/json', 'decathlon-state.json');
+    setMsg('State saved');
+  } catch (e) {
+    setError('Could not save state');
+  }
+});
+
+el('loadState').addEventListener('change', async (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  try {
+    const res = await fetch('/api/state', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: await file.text()
+    });
+    if (!res.ok) {
+      setError((await res.text()) || 'Could not load state');
+    } else {
+      setMsg('State loaded');
+    }
+    await renderStandings();
+  } catch (e) {
+    setError('Could not load state');
+  } finally {
+    ev.target.value = '';
   }
 });
 
@@ -96,14 +137,16 @@ async function renderStandings() {
     const res = await fetch('/api/standings');
     const data = await res.json();
 
+    lastStandings = data;
     const rows = (sortBroken ? data : data.sort((a,b)=> (b.total||0)-(a.total||0)))
-      .map(r => `<tr>
+      .map(r => `<tr data-name="${escapeHtml(r.name)}" title="${escapeHtml(describeRow(r))}">
         <td>${escapeHtml(r.name)}</td>
         <td>${r.scores?.["100m"] ?? ''}</td>
         <td>${r.scores?.["longJump"] ?? ''}</td>
         <td>${r.scores?.["shotPut"] ?? ''}</td>
         <td>${r.scores?.["400m"] ?? ''}</td>
         <td>${r.total ?? 0}</td>
+        <td>${r.position ?? ''}</td>
       </tr>`).join('');
 
     el('standings').innerHTML = rows;
@@ -111,6 +154,29 @@ async function renderStandings() {
     setError('Could not load standings');
   }
 }
+
+// Tooltip with every event: "hep200m: 25 (887 pts)".
+function describeRow(r) {
+  return Object.entries(r.scores || {})
+    .map(([event, pts]) => `${event}: ${r.raw?.[event] ?? '?'} (${pts} pts)`)
+    .join('; ');
+}
+
+// Editing: clicking a row, or changing the event, loads the stored result into the form.
+// Saving again overwrites it.
+function loadStoredResult() {
+  const row = lastStandings.find(r => r.name === el('name2').value.trim());
+  const stored = row?.raw?.[el('event').value];
+  if (stored !== undefined) el('raw').value = stored;
+}
+
+el('standings').addEventListener('click', (ev) => {
+  const tr = ev.target.closest('tr');
+  if (!tr) return;
+  el('name2').value = tr.dataset.name;
+  loadStoredResult();
+});
+el('event').addEventListener('change', loadStoredResult);
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

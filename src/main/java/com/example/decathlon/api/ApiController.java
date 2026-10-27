@@ -1,11 +1,15 @@
 package com.example.decathlon.api;
 
 import com.example.decathlon.core.CompetitionService;
+import com.example.decathlon.core.CoreException;
 import com.example.decathlon.dto.ScoreReq;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @RestController
@@ -16,23 +20,9 @@ public class ApiController {
     public ApiController(CompetitionService comp) { this.comp = comp; }
 
     @PostMapping("/competitors")
-    public ResponseEntity<?> add(@RequestBody Map<String,String> body) {
-        String name = Optional.ofNullable(body.get("name")).orElse("").trim();
-
-        if (!name.matches(".*[A-Za-zÅÄÖåäö].*")) {
-            return ResponseEntity.badRequest().body("Name must contain valid letters");
-        }
-
-        if (getCount() >= 40) {
-            return ResponseEntity.status(429).body("Too many competitors");
-        }
-
-        comp.addCompetitor(name);
+    public ResponseEntity<Void> add(@RequestBody Map<String,String> body) {
+        comp.addCompetitor(body.get("name"));
         return ResponseEntity.status(201).build();
-    }
-
-    private int getCount() {
-        return comp.standings().size();
     }
 
     @PostMapping("/score")
@@ -44,6 +34,41 @@ public class ApiController {
     @GetMapping("/standings")
     public List<Map<String,Object>> standings() { return comp.standings(); }
 
-    @GetMapping(value="/export.csv", produces = MediaType.TEXT_PLAIN_VALUE)
-    public String export() { return comp.exportCsv(); }
+    @GetMapping("/export.csv")
+    public ResponseEntity<String> export() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName("results", "csv")))
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(comp.exportCsv());
+    }
+
+    /** Save: the whole competition as a JSON file. */
+    @GetMapping("/state")
+    public ResponseEntity<String> saveState() {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, attachment(CompetitionService.fileName("decathlon-state", "json")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(comp.exportState());
+    }
+
+    /** Resume: replaces the competition with an uploaded save. An invalid file gives 400 and changes nothing. */
+    @PostMapping("/state")
+    public ResponseEntity<Void> loadState(@RequestBody String json) {
+        comp.importState(json);
+        return ResponseEntity.noContent().build();
+    }
+
+    private static String attachment(String fileName) {
+        return "attachment; filename=\"" + fileName + "\"";
+    }
+
+    @ExceptionHandler(CoreException.class)
+    public ResponseEntity<String> coreError(CoreException e) {
+        HttpStatus status = switch (e.kind()) {
+            case INVALID -> HttpStatus.BAD_REQUEST;
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case LIMIT -> HttpStatus.TOO_MANY_REQUESTS;
+        };
+        return ResponseEntity.status(status).contentType(MediaType.TEXT_PLAIN).body(e.getMessage());
+    }
 }

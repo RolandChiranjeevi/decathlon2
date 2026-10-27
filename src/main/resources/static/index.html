@@ -50,17 +50,21 @@
     <table>
         <thead>
         <tr>
-            <th>Name</th>
-            <th>100m</th>
-            <th>Long Jump</th>
-            <th>Shot Put</th>
-            <th>400m</th>
-            <th>Total</th>
+            <th scope="col">Name</th>
+            <th scope="col">100m</th>
+            <th scope="col">Long Jump</th>
+            <th scope="col">Shot Put</th>
+            <th scope="col">400m</th>
+            <th scope="col">Total</th>
+            <th scope="col">Position</th>
         </tr>
         </thead>
         <tbody id="standings" data-testid="standingsTable"></tbody>
     </table>
     <button id="export" data-testid="exportCsvBtn">Export CSV</button>
+    <button id="saveState" data-testid="saveStateBtn">Save state</button>
+    <label for="loadState">Load state</label>
+    <input id="loadState" data-testid="loadStateInput" type="file" accept=".json,application/json" />
 </div>
 
 <script src="app.js" type="module"></script>

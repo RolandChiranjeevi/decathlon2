@@ -1,9 +1,27 @@
-# Project exclude paths
-/target/notes.txt
-*.txt
-notes.txt
-node_modules/
+# Build output
 target/
 build/
+
+# Dependencies
+node_modules/
+
+# Local files
 .env
 *.log
+notes.txt
+
+# IDE and OS
+.idea/
+.DS_Store
+
+# Test output (written by Playwright, uploaded by CI)
+e2e/playwright-report/
+e2e/test-results/
+e2e/results.json
+
+# Local AI tool state
+.claude-flow/
+.swarm/
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
