@@ -118,7 +118,7 @@ const resultText = (eventId, value) => (isMinuteTime(eventId, value) ? formatTim
 // A result in words: "2:43 (163 s)" for a long time, the plain number otherwise.
 const resultInWords = (eventId, value) => (isMinuteTime(eventId, value) ? `${formatTime(value)} (${value} s)` : String(value));
 // Events that can pass a minute (400m, 800m, 1500m) get the m:ss help; the range comes from the server.
-const canPassMinute = (eventId) => { const r = ranges[eventId]; return !!r && r.unit === 's' && r.max >= 60; };
+const canPassMinute = (eventId) => !!ranges[eventId]?.minutes;
 const badResultMessage = (eventId) => (unitFor(eventId) === 's'
   ? 'Enter the result in seconds (163) or as minutes:seconds (2:43).'
   : 'Enter the result as a number.');
@@ -152,18 +152,25 @@ function updateUnit() {
   updateHint();
 }
 
-// "Allowed range: ..." plus, while typing, what the typed result means in the other notation.
+// "World record: ..." (the limit the server accepts: fastest time for running, furthest result for
+// jumping and throwing) plus, while typing, what the typed result means in the other notation.
 function updateHint() {
   const id = el('event').value;
   const r = ranges[id];
   let text = '';
   if (r) {
-    text = canPassMinute(id)
-      ? `Allowed range: ${formatTime(r.min)} to ${formatTime(r.max)} (${r.min} to ${r.max} s)`
-      : `Allowed range: ${r.min} to ${r.max} ${r.unit}`;
+    const record = r.min ?? r.max;
+    if (record != null) {
+      text = canPassMinute(id) && record >= 60
+        ? `World record: ${formatTime(record)} (${record} s)`
+        : `World record: ${record} ${r.unit}`;
+    }
   }
   const echo = typedResultEcho(id);
   el('rangeHint').textContent = echo ? (text ? `${text} · ${echo}` : echo) : text;
+  // "Can you jump further than Mike Powell did in 1991?"
+  const rec = r?.record;
+  el('recordChallenge').textContent = rec ? `Can you ${rec.action} ${rec.holder} did in ${rec.year}?` : '';
 }
 
 function typedResultEcho(eventId) {

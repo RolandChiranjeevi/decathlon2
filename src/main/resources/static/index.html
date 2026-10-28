@@ -90,6 +90,9 @@
         .field.w-result { flex: 0 0 7.5rem; }
         label { font-size: .8rem; font-weight: 600; color: var(--muted); }
         .hint { font-size: .75rem; color: var(--muted); min-height: 1.1em; }
+        .challenge { font-size: .875rem; font-weight: 600; color: var(--primary); min-height: 1.4em; margin-top: .5rem; }
+        /* On a narrow screen the longer sentences wrap; keep room for two lines so nothing below moves. */
+        @media (max-width: 560px) { .challenge { min-height: 3em; } }
 
         input, button { font: inherit; }
         input {
@@ -287,6 +290,7 @@
                     </div>
                     <button id="save" class="btn primary" type="button" data-testid="saveScoreBtn">Save score</button>
                 </div>
+                <div id="recordChallenge" class="challenge" data-testid="recordChallenge"></div>
                 <div id="rangeHint" class="hint"></div>
             </div>
         </div>
@@ -373,6 +377,6 @@
     </div>
 </dialog>
 
-<script src="app.js?v=10" type="module"></script>
+<script src="app.js?v=13" type="module"></script>
 </body>
 </html>

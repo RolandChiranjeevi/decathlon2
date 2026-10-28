@@ -40,8 +40,10 @@ public class ApiController {
             m.put("label", e.label());
             m.put("competition", e.competition().name());
             m.put("unit", e.unit());
-            m.put("min", e.min());
-            m.put("max", e.max());
+            m.put("min", e.min());   // null when the event has no minimum (jumping and throwing)
+            m.put("max", e.max());   // null when the event has no maximum (running)
+            m.put("minutes", e.minutes());
+            m.put("record", Map.of("holder", e.holder(), "year", e.year(), "action", e.action()));
             list.add(m);
         }
         return list;
