@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "sourceId": "smoke-audit-workflow",
+      "title": "Smoke test finding (from audit.yml)",
+      "description": "A synthetic finding used only to check that Testbench imports audit packages from the allowed GitHub workflow. It does not describe a real defect.",
+      "steps": [
+        "Open the smoke test page",
+        "Look at the synthetic result"
+      ],
+      "expected": "Nothing to fix",
+      "actual": "Synthetic placeholder",
+      "environment": "smoke",
+      "agentSeverity": "low",
+      "confidence": 0.5,
+      "foundAt": "2026-11-03T09:02:00Z",
+      "agentReview": {
+        "status": "unconfirmed",
+        "method": "synthetic",
+        "notes": ""
+      },
+      "fingerprint": "smoke-audit-workflow",
+      "refs": {
+        "requirements": [],
+        "cases": [],
+        "tests": []
+      },
+      "evidence": [
+        {
+          "path": "evidence/smoke.txt",
+          "label": "Synthetic note"
+        }
+      ]
+    }
+  ]
+}

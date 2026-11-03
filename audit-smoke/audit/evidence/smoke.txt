@@ -1,0 +1,1 @@
+Synthetic smoke test data. No real data, no secrets.

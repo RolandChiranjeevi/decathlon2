@@ -1,0 +1,29 @@
+# Smoke test for Testbench: uploads a synthetic audit package as an artifact. Contains no real data.
+name: Audit smoke
+
+on:
+  push:
+    branches: [audit-smoke-test]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Name the artifact
+        id: name
+        run: echo "artifact=testbench-audit-smoke-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the audit package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.artifact }}
+          path: audit-smoke/audit
+          if-no-files-found: error
+          retention-days: 7

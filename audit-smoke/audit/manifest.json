@@ -1,0 +1,32 @@
+{
+  "audit": {
+    "id": "decathlon-smoke-audit",
+    "title": "Smoke test: audit.yml",
+    "startedAt": "2026-11-03T09:00:00Z",
+    "finishedAt": "2026-11-03T09:05:00Z",
+    "project": "D",
+    "agent": {
+      "name": "smoke-test",
+      "version": "0.1.0",
+      "model": "synthetic"
+    },
+    "review": {
+      "status": "self-reviewed",
+      "method": "synthetic example, nothing was actually tested",
+      "reviewer": "none"
+    }
+  },
+  "format": "testbench-audit-package",
+  "version": 1,
+  "files": [
+    {
+      "path": "evidence/smoke.txt",
+      "sha256": "9b8136acfffeebee7b63bc370d947528b363bb814fd35f2759f3cf4693fa8bdf",
+      "size": 53
+    }
+  ],
+  "parts": {
+    "bugs": "bugs.json",
+    "narrative": "report.md"
+  }
+}
