@@ -62,6 +62,19 @@ jobs:
         working-directory: e2e
         run: npx playwright test
 
+      # Sends the result to Testbench, where a failed test becomes one bug (the same test failing again is added to it).
+      # Runs even when the tests failed. A problem with the reporting is a warning and never fails the build.
+      # Needs the secrets TESTBENCH_URL and TESTBENCH_API_TOKEN and the variable TESTBENCH_PROJECT_ID (the Testbench project's number).
+      # Pull requests from forks get no secrets: the script then says so and sends nothing.
+      - name: Report results to Testbench
+        if: always()
+        working-directory: e2e
+        env:
+          TESTBENCH_URL: ${{ secrets.TESTBENCH_URL }}
+          TESTBENCH_PROJECT_ID: ${{ vars.TESTBENCH_PROJECT_ID }}
+          TESTBENCH_API_TOKEN: ${{ secrets.TESTBENCH_API_TOKEN }}
+        run: node ci-report.mjs results.json
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
